@@ -1,0 +1,8 @@
+# ============================================
+# Requirements para Tetris con IA Heurística
+# ============================================
+
+# Core dependencies
+pygame>=2.5.0
+numpy>=1.21.0
+
