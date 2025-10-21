@@ -1,9 +1,7 @@
 """
 Paquete de visualizaciones
 """
-from .tetris_visualizer import *
-from .tetris_ai_viewer import *
-from .neural_ai_viewer import *
+from .tetris_ai_viewer import TetrisAIViewer
+from .training_visualizer import TrainingVisualizer
 
-__all__ = ['TrainingVisualizer', 'GenerationVisualizer', 'ComparisonVisualizer', 
-           'TetrisAIViewer', 'NeuralAIViewer']
+__all__ = ['TetrisAIViewer', 'TrainingVisualizer']

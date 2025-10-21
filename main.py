@@ -24,7 +24,8 @@ def show_menu():
     print()
     print("  1. Jugar Tetris (Modo Manual)")
     print("  2. Ver IA Heurística jugando")
-    print("  3. Información del proyecto")
+    print("  3. Entrenar IA Heurística (Algoritmo Genético)")
+    print("  4. Información del proyecto")
     print("  0. Salir")
     print()
     print("="*70)
@@ -64,6 +65,73 @@ def view_heuristic_ai():
     viewer.run()
 
 
+def train_heuristic_ai():
+    """Inicia el entrenamiento de la IA heurística."""
+    print_header()
+    print("ENTRENAMIENTO DE IA HEURISTICA")
+    print("="*70)
+    print()
+    print("Este proceso usa un algoritmo genético para encontrar")
+    print("los mejores pesos para la función de evaluación heurística.")
+    print()
+    
+    # Parámetros personalizables
+    try:
+        print("Configuración del entrenamiento:")
+        print()
+        
+        pop = input("  Tamaño de población (default: 20): ").strip()
+        population_size = int(pop) if pop else 20
+        
+        gen = input("  Número de generaciones (default: 10): ").strip()
+        generations = int(gen) if gen else 10
+        
+        games = input("  Número de partidas por individuo (default: 5): ").strip()
+        num_games = int(games) if games else 5
+        
+        mut = input("  Tasa de mutación 0-1 (default: 0.1): ").strip()
+        mutation_rate = float(mut) if mut else 0.1
+        
+        par = input("  ¿Evaluación paralela (todos a la vez)? (s/n, default: s): ").strip().lower()
+        use_parallel = par != 'n'
+        
+        print()
+        print("Iniciando entrenamiento...")
+        if use_parallel:
+            print("Se abrirá una ventana mostrando TODOS los individuos jugando simultáneamente.")
+        else:
+            print("Se abrirá una ventana mostrando los individuos jugando uno por uno.")
+        print("Esto puede tomar varios minutos dependiendo de los parámetros.")
+        print()
+        input("Presiona ENTER para comenzar...")
+        
+        from src.ai.training import train_heuristic_ai as train_ai
+        
+        best_weights = train_ai(
+            population_size=population_size,
+            generations=generations,
+            num_games=num_games,
+            mutation_rate=mutation_rate,
+            use_visualizer=True,
+            use_parallel=use_parallel
+        )
+        
+        if best_weights:
+            print()
+            print("¡Entrenamiento completado exitosamente!")
+            print("Los mejores pesos han sido guardados en 'best_heuristic_weights.txt'")
+        
+    except KeyboardInterrupt:
+        print("\n\nEntrenamiento interrumpido por el usuario.")
+    except Exception as e:
+        print(f"\nError durante el entrenamiento: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    print()
+    input("Presiona ENTER para volver al menú...")
+
+
 def show_info():
     """Muestra información del proyecto."""
     print_header()
@@ -75,7 +143,8 @@ def show_info():
     print("Archivos del Proyecto:")
     print("  - src/game/tetris_game.py: Lógica del juego")
     print("  - src/game/tetris_ui.py: Interfaz gráfica")
-    print("  - src/ai/tetris_ai.py: IA heurística")
+    print("  - src/ai/tetris_ai.py: IA heurística y algoritmo genético")
+    print("  - src/ai/trainer.py: Módulo de entrenamiento")
     print("  - src/visualization/tetris_ai_viewer.py: Visualizador")
     print()
     print("Sistema de IA Heurística:")
@@ -97,6 +166,16 @@ def show_info():
     print("  4. Irregularidad (Bumpiness)")
     print("     Diferencias de altura entre columnas adyacentes.")
     print("     Peso negativo: preferir tableros más uniformes.")
+    print()
+    print("Algoritmo Genético:")
+    print()
+    print("El entrenamiento usa un algoritmo genético para optimizar los pesos:")
+    print("  - Crea una población de individuos con pesos aleatorios")
+    print("  - Evalúa cada individuo jugando múltiples partidas")
+    print("  - Selecciona los mejores individuos (élite)")
+    print("  - Crea nuevos individuos mediante cruce y mutación")
+    print("  - Repite el proceso durante varias generaciones")
+    print("  - Guarda los mejores pesos en 'best_heuristic_weights.txt'")
     print()
     print("Características del Juego:")
     print("  - Sistema de rotación con wall kick")
@@ -125,6 +204,8 @@ def main():
             elif choice == '2':
                 view_heuristic_ai()
             elif choice == '3':
+                train_heuristic_ai()
+            elif choice == '4':
                 show_info()
             elif choice == '0':
                 print_header()

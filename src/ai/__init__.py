@@ -1,7 +1,6 @@
 """
 Paquete de sistemas de Inteligencia Artificial
 """
-from .tetris_ai import *
-from .tetris_neural_ai import *
+from .tetris_ai import TetrisAI
 
-__all__ = ['TetrisAI', 'TetrisNeuralAI', 'GeneticAlgorithm', 'NeuroEvolution']
+__all__ = ['TetrisAI']

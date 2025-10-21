@@ -15,11 +15,11 @@ class TetrisAI:
         """
         if weights is None:
             self.weights = {
-                'aggregate_height': -0.510066,
-                'complete_lines': 0.760666,
-                'holes': -0.35663,
-                'bumpiness': -0.184483,
-                'tetris_bonus': 3.0
+                'aggregate_height': -1.000000,
+                'complete_lines': 0.373056,
+                'holes': -0.725299,
+                'bumpiness': -0.299918,
+                'tetris_bonus': 1.0
             }
         else:
             self.weights = weights
@@ -220,6 +220,16 @@ class GeneticAlgorithm:
             }
             self.population.append(individual)
     
+    def init_simple_population(self):
+        """Inicializa la población con estructura simple (solo pesos).
+        
+        Usa esta versión cuando trabajas con training.py que espera
+        una lista simple de diccionarios de pesos.
+        """
+        self.population = []
+        for _ in range(self.population_size):
+            self.population.append(self.create_random_individual())
+    
     def evaluate_fitness(self, weights, num_games=5):
         """Evalúa el fitness de un individuo jugando varios juegos.
         
@@ -298,6 +308,50 @@ class GeneticAlgorithm:
                 mutated[key] += np.random.uniform(-0.2, 0.2)
                 mutated[key] = np.clip(mutated[key], -1, 1)
         return mutated
+    
+    def evolve(self, fitness_scores):
+        """Evoluciona la población usando los fitness scores dados.
+        
+        Este método trabaja con población simple (lista de diccionarios de pesos).
+        Usado por training.py.
+        
+        Args:
+            fitness_scores: Lista con los fitness de cada individuo.
+        """
+        # Crear pares (individuo, fitness)
+        population_with_fitness = list(zip(self.population, fitness_scores))
+        
+        # Ordenar por fitness (mayor a menor)
+        population_with_fitness.sort(key=lambda x: x[1], reverse=True)
+        
+        # Mantener élite
+        elite_size = max(1, self.population_size // 5)  # Top 20%
+        new_population = [ind for ind, _ in population_with_fitness[:elite_size]]
+        
+        # Crear nueva generación mediante selección, cruce y mutación
+        while len(new_population) < self.population_size:
+            # Selección por torneo simple
+            idx1 = np.random.randint(0, min(elite_size * 2, len(population_with_fitness)))
+            idx2 = np.random.randint(0, min(elite_size * 2, len(population_with_fitness)))
+            
+            parent1 = population_with_fitness[idx1][0]
+            parent2 = population_with_fitness[idx2][0]
+            
+            # Cruce
+            child = {}
+            for key in parent1.keys():
+                if np.random.random() < 0.5:
+                    child[key] = parent1[key]
+                else:
+                    child[key] = parent2[key]
+            
+            # Mutación
+            child = self.mutate(child)
+            
+            new_population.append(child)
+        
+        self.population = new_population
+        self.generation += 1
     
     def evolve_generation(self):
         """Evoluciona una generación completa del algoritmo."""
