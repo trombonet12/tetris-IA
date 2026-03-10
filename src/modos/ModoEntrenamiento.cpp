@@ -21,6 +21,8 @@ ModoEntrenamiento::ModoEntrenamiento(const sf::Font& fuente)
     , fuente_(fuente)
     , agenteSeleccionado_(-1)
     , mostrarRedNeuronal_(false)
+    , poblacionConfig_(AG_POBLACION_DEFECTO)
+    , velocidadInicialConfig_(VELOCIDAD_X10)
 {
     // Configurar el entrenador con valores por defecto
     entrenador_.configurar(AG_POBLACION_DEFECTO, NN_ARQUITECTURA_DEFECTO);
@@ -40,6 +42,13 @@ void ModoEntrenamiento::procesarEvento(const sf::Event& evento,
     botonVolver_.procesarEvento(evento, ventana);
 
     for (auto& btn : botonesVelocidad_) {
+        btn.procesarEvento(evento, ventana);
+    }
+
+    // Botones de configuración pre-inicio
+    botonPoblacionMas_.procesarEvento(evento, ventana);
+    botonPoblacionMenos_.procesarEvento(evento, ventana);
+    for (auto& btn : botonesVelocidadInicial_) {
         btn.procesarEvento(evento, ventana);
     }
 
@@ -117,6 +126,8 @@ void ModoEntrenamiento::configurarBotones() {
     botonIniciar_.configurar("Iniciar", fuente_, sf::Vector2f(270, y), tamBtn);
     botonIniciar_.alHacerClick([this]() {
         if (entrenador_.obtenerEstado() == EstadoEntrenamiento::DETENIDO) {
+            entrenador_.configurar(poblacionConfig_, NN_ARQUITECTURA_DEFECTO);
+            entrenador_.establecerVelocidad(velocidadInicialConfig_);
             entrenador_.iniciar();
         }
     });
@@ -160,6 +171,46 @@ void ModoEntrenamiento::configurarBotones() {
         });
         botonesVelocidad_.push_back(std::move(btn));
         velX += 70;
+    }
+
+    // ---- Botones de configuración pre-inicio (panel izquierdo) ----
+    sf::Vector2f tamBtnPeq(30, 22);
+
+    botonPoblacionMenos_.configurar("-", fuente_, sf::Vector2f(155, 30), tamBtnPeq);
+    botonPoblacionMenos_.establecerTamanoTexto(14);
+    botonPoblacionMenos_.alHacerClick([this]() {
+        if (entrenador_.obtenerEstado() == EstadoEntrenamiento::DETENIDO && poblacionConfig_ > 10) {
+            poblacionConfig_ -= 10;
+        }
+    });
+
+    botonPoblacionMas_.configurar("+", fuente_, sf::Vector2f(190, 30), tamBtnPeq);
+    botonPoblacionMas_.establecerTamanoTexto(14);
+    botonPoblacionMas_.alHacerClick([this]() {
+        if (entrenador_.obtenerEstado() == EstadoEntrenamiento::DETENIDO && poblacionConfig_ < 500) {
+            poblacionConfig_ += 10;
+        }
+    });
+
+    // Botones de velocidad inicial (en el panel izquierdo)
+    std::vector<std::pair<std::string, float>> velIniciales = {
+        {"x1", VELOCIDAD_X1}, {"x2", VELOCIDAD_X2}, {"x5", VELOCIDAD_X5},
+        {"x10", VELOCIDAD_X10}, {"Max", VELOCIDAD_MAX}
+    };
+
+    float velIniX = 10;
+    for (const auto& [nombre, vel] : velIniciales) {
+        Boton btn(nombre, fuente_, sf::Vector2f(velIniX, 78), sf::Vector2f(44, 22));
+        btn.establecerTamanoTexto(12);
+        float velocidad = vel;
+        btn.alHacerClick([this, velocidad]() {
+            if (entrenador_.obtenerEstado() == EstadoEntrenamiento::DETENIDO) {
+                velocidadInicialConfig_ = velocidad;
+                entrenador_.establecerVelocidad(velocidad);
+            }
+        });
+        botonesVelocidadInicial_.push_back(std::move(btn));
+        velIniX += 48;
     }
 }
 
@@ -231,15 +282,42 @@ void ModoEntrenamiento::renderizarPanelParametros(sf::RenderTarget& objetivo) co
     float y = 30;
     float sep = 22;
 
+    bool detenido = (entrenador_.obtenerEstado() == EstadoEntrenamiento::DETENIDO);
+
     const auto& ag = entrenador_.obtenerAlgoritmoGenetico();
 
     std::ostringstream ss;
     ss << std::fixed << std::setprecision(3);
 
-    ui_.dibujarEtiquetaValor(objetivo, "Poblacion:",
-                              std::to_string(entrenador_.obtenerTamPoblacion()),
-                              sf::Vector2f(x, y), 14);
+    // Población: editable si detenido
+    if (detenido) {
+        ui_.dibujarEtiquetaValor(objetivo, "Poblacion:",
+                                  std::to_string(poblacionConfig_),
+                                  sf::Vector2f(x, y), 14);
+        botonPoblacionMenos_.dibujar(const_cast<sf::RenderTarget&>(objetivo));
+        botonPoblacionMas_.dibujar(const_cast<sf::RenderTarget&>(objetivo));
+    } else {
+        ui_.dibujarEtiquetaValor(objetivo, "Poblacion:",
+                                  std::to_string(entrenador_.obtenerTamPoblacion()),
+                                  sf::Vector2f(x, y), 14);
+    }
     y += sep;
+
+    // Velocidad inicial: selector si detenido
+    if (detenido) {
+        std::string velStr;
+        if (velocidadInicialConfig_ >= VELOCIDAD_MAX) velStr = "Max";
+        else { std::ostringstream vs; vs << "x" << static_cast<int>(velocidadInicialConfig_); velStr = vs.str(); }
+        ui_.dibujarEtiquetaValor(objetivo, "Velocidad:", velStr,
+                                  sf::Vector2f(x, y), 14);
+        y += 18;
+        for (const auto& btn : botonesVelocidadInicial_) {
+            btn.dibujar(const_cast<sf::RenderTarget&>(objetivo));
+        }
+        y += 30;
+    } else {
+        y += sep;
+    }
 
     ss.str(""); ss << ag.obtenerTasaMutacion();
     ui_.dibujarEtiquetaValor(objetivo, "Tasa mutacion:", ss.str(),

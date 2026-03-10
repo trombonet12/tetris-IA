@@ -40,11 +40,16 @@ public:
     // Obtiene la última acción ejecutada
     Accion obtenerUltimaAccion() const { return ultimaAccion_; }
 
+    // El Entrenador accede a los contadores de acciones para el bucle batch GPU
+    friend class Entrenador;
+
 private:
     RedNeuronal red_;
     Tetris tetris_;
     std::vector<float> ultimaSalida_;
     Accion ultimaAccion_;
+    int accionesPiezaActual_;      // Contador de acciones en la pieza actual
+    int piezasAlInicioAccion_;     // Piezas colocadas al inicio de la acción
 };
 
 } // namespace tetris

@@ -189,69 +189,94 @@ void Entrenador::simularGeneracion() {
     // Simular hasta que todos los agentes hayan terminado
     bool todosTerminaron = false;
 
+    // Lote máximo por adquisición de mutex para no bloquear el hilo de render
+    constexpr int PASOS_POR_LOTE = 50;
+
     while (!todosTerminaron && estado_.load() == EstadoEntrenamiento::EJECUTANDO) {
         todosTerminaron = true;
 
-        {
-            std::lock_guard<std::mutex> lock(mutexDatos_);
+        // Determinar cuántos pasos totales queremos este ciclo
+        int pasosRestantes = static_cast<int>(velocidadSimulacion_);
+        if (pasosRestantes < 1) pasosRestantes = 1;
 
-            // Determinar cuántos pasos ejecutar según la velocidad
-            int pasosEsteFrame = static_cast<int>(velocidadSimulacion_);
-            if (pasosEsteFrame < 1) pasosEsteFrame = 1;
+        while (pasosRestantes > 0 && estado_.load() == EstadoEntrenamiento::EJECUTANDO) {
+            int pasosLote = std::min(pasosRestantes, PASOS_POR_LOTE);
+            pasosRestantes -= pasosLote;
 
-            for (int paso = 0; paso < pasosEsteFrame; ++paso) {
-                // Recopilar entradas de agentes activos para evaluación por lotes
-                std::vector<RedNeuronal*> redesActivas;
-                std::vector<std::vector<float>> entradasActivas;
-                std::vector<int> indicesActivos;
+            {
+                std::lock_guard<std::mutex> lock(mutexDatos_);
 
-                for (int i = 0; i < static_cast<int>(agentes_.size()); ++i) {
-                    if (agentes_[i].estaActivo()) {
-                        redesActivas.push_back(&agentes_[i].obtenerRed());
-                        entradasActivas.push_back(
-                            agentes_[i].obtenerTetris().obtenerEntradaIA());
-                        indicesActivos.push_back(i);
-                    }
-                }
+                for (int paso = 0; paso < pasosLote; ++paso) {
+                    // Recopilar entradas de agentes activos para evaluación por lotes
+                    std::vector<RedNeuronal*> redesActivas;
+                    std::vector<std::vector<float>> entradasActivas;
+                    std::vector<int> indicesActivos;
 
-                if (redesActivas.empty()) break;
-
-                // Evaluación por lotes en GPU
-                auto salidas = RedNeuronal::evaluarLote(redesActivas, entradasActivas);
-
-                // Aplicar acciones
-                for (size_t j = 0; j < indicesActivos.size(); ++j) {
-                    int idx = indicesActivos[j];
-                    const auto& salida = salidas[j];
-
-                    // Encontrar mejor acción
-                    int mejorAccion = 0;
-                    float mejorValor = salida[0];
-                    for (int a = 1; a < static_cast<int>(salida.size()); ++a) {
-                        if (salida[a] > mejorValor) {
-                            mejorValor = salida[a];
-                            mejorAccion = a;
+                    for (int i = 0; i < static_cast<int>(agentes_.size()); ++i) {
+                        if (agentes_[i].estaActivo()) {
+                            redesActivas.push_back(&agentes_[i].obtenerRed());
+                            entradasActivas.push_back(
+                                agentes_[i].obtenerTetris().obtenerEntradaIA());
+                            indicesActivos.push_back(i);
                         }
                     }
 
-                    agentes_[idx].obtenerTetris().ejecutarAccion(
-                        static_cast<Accion>(mejorAccion));
-                    agentes_[idx].obtenerTetris().ejecutarPasoLogico();
-                }
-            }
+                    if (redesActivas.empty()) { pasosRestantes = 0; break; }
 
-            // Verificar si todos terminaron
-            for (const auto& a : agentes_) {
-                if (a.estaActivo()) {
-                    todosTerminaron = false;
-                    break;
+                    // Evaluación por lotes en GPU
+                    auto salidas = RedNeuronal::evaluarLote(redesActivas, entradasActivas);
+
+                    // Aplicar acciones
+                    for (size_t j = 0; j < indicesActivos.size(); ++j) {
+                        int idx = indicesActivos[j];
+                        const auto& salida = salidas[j];
+
+                        // Detectar si se colocó una nueva pieza (reiniciar contador)
+                        int piezasAhora = agentes_[idx].obtenerTetris().obtenerEstadisticas().piezasColocadas;
+                        if (piezasAhora != agentes_[idx].piezasAlInicioAccion_) {
+                            agentes_[idx].accionesPiezaActual_ = 0;
+                            agentes_[idx].piezasAlInicioAccion_ = piezasAhora;
+                        }
+
+                        // Encontrar mejor acción
+                        int mejorAccion = 0;
+                        float mejorValor = salida[0];
+                        for (int a = 1; a < static_cast<int>(salida.size()); ++a) {
+                            if (salida[a] > mejorValor) {
+                                mejorValor = salida[a];
+                                mejorAccion = a;
+                            }
+                        }
+
+                        // Si se excede el límite, forzar caída dura
+                        ++agentes_[idx].accionesPiezaActual_;
+                        if (agentes_[idx].accionesPiezaActual_ > MAX_ACCIONES_POR_PIEZA) {
+                            mejorAccion = static_cast<int>(Accion::CAIDA_DURA);
+                        }
+
+                        agentes_[idx].obtenerTetris().ejecutarAccion(
+                            static_cast<Accion>(mejorAccion));
+                        agentes_[idx].obtenerTetris().ejecutarPasoLogico();
+                    }
                 }
-            }
+
+                // Verificar si todos terminaron
+                todosTerminaron = true;
+                for (const auto& a : agentes_) {
+                    if (a.estaActivo()) {
+                        todosTerminaron = false;
+                        break;
+                    }
+                }
+            } // mutex liberado aquí
+
+            // Ceder tiempo al hilo principal para que pueda renderizar
+            std::this_thread::sleep_for(std::chrono::microseconds(200));
         }
 
-        // Pequeña pausa para no saturar la CPU y permitir renderizado
-        if (velocidadSimulacion_ < VELOCIDAD_MAX) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        // Pausa adicional a velocidades bajas para mantener framerate visual
+        if (velocidadSimulacion_ < VELOCIDAD_X5) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(8));
         }
     }
 }

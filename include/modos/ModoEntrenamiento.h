@@ -46,6 +46,13 @@ private:
     Boton botonVolver_;
     std::vector<Boton> botonesVelocidad_;
 
+    // Configuración pre-inicio
+    int poblacionConfig_;           // Población editable antes de iniciar
+    float velocidadInicialConfig_;  // Velocidad seleccionada antes de iniciar
+    Boton botonPoblacionMas_;
+    Boton botonPoblacionMenos_;
+    std::vector<Boton> botonesVelocidadInicial_;
+
     // Historial para gráficas
     std::vector<float> historialMejor_;
     std::vector<float> historialMedia_;

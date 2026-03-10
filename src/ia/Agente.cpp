@@ -13,11 +13,20 @@ Agente::Agente(const std::vector<int>& arquitecturaRed, unsigned int semilla)
     : red_(arquitecturaRed)
     , tetris_(semilla)
     , ultimaAccion_(Accion::BAJAR_SUAVE)
+    , accionesPiezaActual_(0)
+    , piezasAlInicioAccion_(0)
 {
 }
 
 void Agente::jugarPaso() {
     if (!estaActivo()) return;
+
+    // Detectar si se colocó una nueva pieza (reiniciar contador)
+    int piezasAhora = tetris_.obtenerEstadisticas().piezasColocadas;
+    if (piezasAhora != piezasAlInicioAccion_) {
+        accionesPiezaActual_ = 0;
+        piezasAlInicioAccion_ = piezasAhora;
+    }
 
     // 1. Obtener el estado actual del juego como vector de entrada
     auto entrada = tetris_.obtenerEntradaIA();
@@ -35,12 +44,18 @@ void Agente::jugarPaso() {
         }
     }
 
+    // 4. Si se excede el límite de acciones por pieza, forzar caída dura
+    ++accionesPiezaActual_;
+    if (accionesPiezaActual_ > MAX_ACCIONES_POR_PIEZA) {
+        mejorAccion = static_cast<int>(Accion::CAIDA_DURA);
+    }
+
     ultimaAccion_ = static_cast<Accion>(mejorAccion);
 
-    // 4. Ejecutar la acción en el juego
+    // 5. Ejecutar la acción en el juego
     tetris_.ejecutarAccion(ultimaAccion_);
 
-    // 5. Avanzar un paso lógico (gravedad)
+    // 6. Avanzar un paso lógico (gravedad)
     tetris_.ejecutarPasoLogico();
 }
 
@@ -48,6 +63,8 @@ void Agente::reiniciar(unsigned int semilla) {
     tetris_.reiniciar();
     ultimaSalida_.clear();
     ultimaAccion_ = Accion::BAJAR_SUAVE;
+    accionesPiezaActual_ = 0;
+    piezasAlInicioAccion_ = 0;
 }
 
 } // namespace tetris

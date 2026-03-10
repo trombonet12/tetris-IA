@@ -248,4 +248,8 @@ constexpr float VELOCIDAD_X5 = 5.0f;
 constexpr float VELOCIDAD_X10 = 10.0f;
 constexpr float VELOCIDAD_MAX = 1000.0f;
 
+// ---- Límite anti-bucle para la IA ----
+// Máximo de acciones por pieza antes de forzar caída dura
+constexpr int MAX_ACCIONES_POR_PIEZA = 80;
+
 } // namespace tetris
