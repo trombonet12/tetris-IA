@@ -83,8 +83,10 @@ void ModoIAEntrenada::procesarEvento(const sf::Event& evento,
             float listaY = 250.0f;
             float alturaItem = 25.0f;
 
-            float mouseX = static_cast<float>(mouseEvent->position.x);
-            float mouseY = static_cast<float>(mouseEvent->position.y);
+            sf::Vector2f posMundo = ventana.mapPixelToCoords(
+                sf::Vector2i(mouseEvent->position.x, mouseEvent->position.y));
+            float mouseX = posMundo.x;
+            float mouseY = posMundo.y;
 
             if (mouseX >= listaX && mouseX <= listaX + 330) {
                 int idx = static_cast<int>((mouseY - listaY) / alturaItem);

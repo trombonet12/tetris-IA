@@ -54,6 +54,9 @@ private:
 
     // Carga una fuente del sistema
     bool cargarFuente();
+
+    // Actualiza la vista para mantener aspecto 16:9 con letterbox
+    void actualizarVista(sf::Vector2u tamanoVentana);
 };
 
 } // namespace tetris

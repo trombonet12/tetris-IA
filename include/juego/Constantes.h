@@ -213,33 +213,39 @@ inline const std::array<std::array<Coord, 5>, 8> WALL_KICKS_I = {{
 }};
 
 // ---- Tamaños de entrada/salida de la red neuronal ----
-// Entrada: tablero aplanado (200) + tipo pieza actual one-hot (7) + alturas por
-//          columna normalizadas (10) + número de huecos normalizado (1) = 218
+// Entrada: tablero aplanado (200) + tipo pieza actual one-hot (7)
+//        + posición pieza: columna, fila, rotación (3)
+//        + pieza siguiente one-hot (7)
+//        + alturas por columna normalizadas (10) + huecos normalizado (1) = 228
 constexpr int NN_TAM_TABLERO = TABLERO_ANCHO * TABLERO_ALTO;     // 200
 constexpr int NN_TAM_PIEZA_ONEHOT = NUM_TIPOS_PIEZA;              // 7
+constexpr int NN_TAM_POSICION = 3;                                // col, fila, rotación
+constexpr int NN_TAM_SIGUIENTE = NUM_TIPOS_PIEZA;                 // 7 (next piece one-hot)
 constexpr int NN_TAM_ALTURAS = TABLERO_ANCHO;                     // 10
 constexpr int NN_TAM_HUECOS = 1;                                  // 1
 constexpr int NN_TAM_ENTRADA = NN_TAM_TABLERO + NN_TAM_PIEZA_ONEHOT
-                             + NN_TAM_ALTURAS + NN_TAM_HUECOS;   // 218
+                             + NN_TAM_POSICION + NN_TAM_SIGUIENTE
+                             + NN_TAM_ALTURAS + NN_TAM_HUECOS;   // 228
 constexpr int NN_TAM_SALIDA = NUM_ACCIONES;                       // 6
 
-// Arquitectura por defecto de la red neuronal (capas ocultas)
-inline const std::vector<int> NN_ARQUITECTURA_DEFECTO = { 218, 128, 64, 32, 16, 6 };
+// Arquitectura por defecto de la red neuronal
+inline const std::vector<int> NN_ARQUITECTURA_DEFECTO = { 228, 64, 6 };
 
 // ---- Parámetros del algoritmo genético (por defecto) ----
 constexpr int AG_POBLACION_DEFECTO = 100;
-constexpr float AG_TASA_MUTACION = 0.1f;
-constexpr float AG_SIGMA_MUTACION = 0.3f;
-constexpr float AG_PORCENTAJE_ELITISMO = 0.1f;
+constexpr float AG_TASA_MUTACION = 0.15f;
+constexpr float AG_SIGMA_MUTACION = 0.4f;
+constexpr float AG_PORCENTAJE_ELITISMO = 0.15f;
 constexpr int AG_TAMANO_TORNEO = 5;
 
 // ---- Fitness ----
-constexpr float FITNESS_POR_LINEA = 1.0f;
-constexpr float FITNESS_POR_TETRIS = 800.0f;
-constexpr float FITNESS_POR_PIEZA = 0.01f;
-constexpr float FITNESS_PENALIZACION_GAME_OVER = -5.0f;
-constexpr float FITNESS_PENALIZACION_ALTURA = -0.05f;
-constexpr int FITNESS_PIEZAS_MINIMAS = 50;
+constexpr float FITNESS_POR_LINEA = 10.0f;
+constexpr float FITNESS_POR_TETRIS = 400.0f;
+constexpr float FITNESS_POR_PIEZA = 1.0f;
+constexpr float FITNESS_PENALIZACION_GAME_OVER = -20.0f;
+constexpr float FITNESS_PENALIZACION_ALTURA = -0.5f;
+constexpr float FITNESS_POR_HUECO = -0.3f;
+constexpr int FITNESS_PIEZAS_MINIMAS = 30;
 
 // ---- Velocidades de simulación ----
 constexpr float VELOCIDAD_X1 = 1.0f;

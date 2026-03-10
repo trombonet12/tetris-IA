@@ -55,8 +55,8 @@ void ModoEntrenamiento::procesarEvento(const sf::Event& evento,
     // Click en mini-tablero para seleccionar agente
     if (const auto* mouseEvent = evento.getIf<sf::Event::MouseButtonPressed>()) {
         if (mouseEvent->button == sf::Mouse::Button::Left) {
-            sf::Vector2f posRaton(static_cast<float>(mouseEvent->position.x),
-                                   static_cast<float>(mouseEvent->position.y));
+            sf::Vector2f posRaton = ventana.mapPixelToCoords(
+                sf::Vector2i(mouseEvent->position.x, mouseEvent->position.y));
             int idx = detectarClickTablero(posRaton);
             if (idx >= 0) {
                 if (agenteSeleccionado_ == idx) {
@@ -355,17 +355,19 @@ void ModoEntrenamiento::renderizarPanelParametros(sf::RenderTarget& objetivo) co
     // Información de fitness
     ui_.dibujarTexto(objetivo, "Funcion fitness:", sf::Vector2f(x, y), 14, COLOR_TEXTO_TITULO);
     y += 18;
-    ui_.dibujarTexto(objetivo, "+1/linea", sf::Vector2f(x, y), 12, COLOR_TEXTO);
+    ui_.dibujarTexto(objetivo, "+1/pieza colocada", sf::Vector2f(x, y), 12, COLOR_TEXTO);
     y += 16;
-    ui_.dibujarTexto(objetivo, "+800/tetris (4 lineas)", sf::Vector2f(x, y), 12,
+    ui_.dibujarTexto(objetivo, "+10/linea", sf::Vector2f(x, y), 12, COLOR_TEXTO);
+    y += 16;
+    ui_.dibujarTexto(objetivo, "+400/tetris (4 lineas)", sf::Vector2f(x, y), 12,
                       sf::Color(100, 255, 100));
     y += 16;
-    ui_.dibujarTexto(objetivo, "+0.01/pieza", sf::Vector2f(x, y), 12, COLOR_TEXTO);
-    y += 16;
-    ui_.dibujarTexto(objetivo, "-5 game over prematuro", sf::Vector2f(x, y), 12,
+    ui_.dibujarTexto(objetivo, "-20 game over prematuro", sf::Vector2f(x, y), 12,
                       sf::Color(255, 100, 100));
     y += 16;
-    ui_.dibujarTexto(objetivo, "-0.05 * alt. media", sf::Vector2f(x, y), 12, COLOR_TEXTO);
+    ui_.dibujarTexto(objetivo, "-0.5 * alt. media", sf::Vector2f(x, y), 12, COLOR_TEXTO);
+    y += 16;
+    ui_.dibujarTexto(objetivo, "-0.3 * huecos", sf::Vector2f(x, y), 12, COLOR_TEXTO);
 }
 
 void ModoEntrenamiento::renderizarPanelEstadisticas(sf::RenderTarget& objetivo) const {

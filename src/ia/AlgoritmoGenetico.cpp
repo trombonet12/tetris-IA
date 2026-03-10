@@ -62,28 +62,12 @@ std::vector<std::vector<float>> AlgoritmoGenetico::evolucionar(
         nuevaGeneracion.push_back(poblacionConFitness[indices[i]].first);
     }
 
-    // Generar el resto de la población mediante selección, cruce y mutación
+    // Generar el resto: seleccionar padre por torneo, clonar y mutar
+    // (sin crossover — el cruce uniforme destruye la coherencia de pesos en NNs)
     while (static_cast<int>(nuevaGeneracion.size()) < tamPoblacion) {
-        // Seleccionar dos padres por torneo
-        int idxPadre1 = seleccionTorneo(fitnesses);
-        int idxPadre2 = seleccionTorneo(fitnesses);
-
-        // Asegurar que son diferentes
-        int intentos = 0;
-        while (idxPadre2 == idxPadre1 && intentos < 10) {
-            idxPadre2 = seleccionTorneo(fitnesses);
-            ++intentos;
-        }
-
-        // Cruce uniforme
-        auto hijo = cruceUniforme(
-            poblacionConFitness[idxPadre1].first,
-            poblacionConFitness[idxPadre2].first
-        );
-
-        // Mutación
+        int idxPadre = seleccionTorneo(fitnesses);
+        auto hijo = poblacionConFitness[idxPadre].first; // clonar
         mutar(hijo);
-
         nuevaGeneracion.push_back(std::move(hijo));
     }
 

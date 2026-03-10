@@ -214,12 +214,23 @@ std::vector<float> Tetris::obtenerEntradaIA() const {
         entrada.push_back(static_cast<int>(piezaActual_.obtenerTipo()) == i ? 1.0f : 0.0f);
     }
 
-    // 3. Alturas por columna normalizadas (10)
+    // 3. Posición de la pieza actual (3 valores normalizados)
+    entrada.push_back(static_cast<float>(piezaActual_.obtenerColumna()) / TABLERO_ANCHO);
+    entrada.push_back(static_cast<float>(piezaActual_.obtenerFila()) / TABLERO_ALTO_TOTAL);
+    entrada.push_back(static_cast<float>(piezaActual_.obtenerRotacion()) / 4.0f);
+
+    // 4. Pieza siguiente (one-hot, 7 valores)
+    TipoPieza siguiente = bolsa_.empty() ? TipoPieza::NINGUNA : bolsa_.front();
+    for (int i = 0; i < NUM_TIPOS_PIEZA; ++i) {
+        entrada.push_back(static_cast<int>(siguiente) == i ? 1.0f : 0.0f);
+    }
+
+    // 5. Alturas por columna normalizadas (10)
     for (int i = 0; i < NN_TAM_ALTURAS; ++i) {
         entrada.push_back(estadoTablero[NN_TAM_TABLERO + i]);
     }
 
-    // 4. Huecos normalizado (1)
+    // 6. Huecos normalizado (1)
     entrada.push_back(estadoTablero[NN_TAM_TABLERO + NN_TAM_ALTURAS]);
 
     return entrada;
@@ -228,14 +239,14 @@ std::vector<float> Tetris::obtenerEntradaIA() const {
 float Tetris::calcularFitness() const {
     float fitness = 0.0f;
 
+    // Recompensa por supervivencia (piezas colocadas) — señal principal temprana
+    fitness += stats_.piezasColocadas * FITNESS_POR_PIEZA;
+
     // Recompensa por líneas limpiadas
     fitness += stats_.lineasTotales * FITNESS_POR_LINEA;
 
     // Recompensa masiva por Tetris (4 líneas a la vez)
     fitness += stats_.tetrisCount * FITNESS_POR_TETRIS;
-
-    // Recompensa por supervivencia (piezas colocadas)
-    fitness += stats_.piezasColocadas * FITNESS_POR_PIEZA;
 
     // Penalización por game over prematuro
     if (estado_ == EstadoJuego::GAME_OVER && stats_.piezasColocadas < FITNESS_PIEZAS_MINIMAS) {
@@ -244,6 +255,9 @@ float Tetris::calcularFitness() const {
 
     // Penalización por altura media del tablero
     fitness += tablero_.obtenerAlturaMedia() * FITNESS_PENALIZACION_ALTURA;
+
+    // Penalización por huecos en el tablero
+    fitness += tablero_.contarHuecos() * FITNESS_POR_HUECO;
 
     return fitness;
 }

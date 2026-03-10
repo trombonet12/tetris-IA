@@ -49,10 +49,10 @@ bool Boton::procesarEvento(const sf::Event& evento, const sf::RenderWindow& vent
     if (!activo_ || !visible_) return false;
 
     sf::Vector2i posRaton = sf::Mouse::getPosition(ventana);
+    sf::Vector2f posRatonMundo = ventana.mapPixelToCoords(posRaton);
     sf::FloatRect bounds = forma_.getGlobalBounds();
 
-    bool dentroDelBoton = bounds.contains(sf::Vector2f(static_cast<float>(posRaton.x),
-                                                        static_cast<float>(posRaton.y)));
+    bool dentroDelBoton = bounds.contains(posRatonMundo);
 
     // Actualizar estado hover
     hover_ = dentroDelBoton;

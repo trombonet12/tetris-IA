@@ -51,17 +51,20 @@ bool Aplicacion::inicializar() {
         return false;
     }
 
-    // Crear ventana
+    // Crear ventana (redimensionable)
     ventana_.create(sf::VideoMode({static_cast<unsigned>(config_.anchoVentana),
                                     static_cast<unsigned>(config_.altoVentana)}),
                     "Tetris IA - Joan L.",
-                    config_.pantallaCompleta ? sf::Style::None : sf::Style::Close);
+                    config_.pantallaCompleta ? sf::Style::None : sf::Style::Default);
     if (config_.pantallaCompleta) {
         ventana_.create(sf::VideoMode::getDesktopMode(), "Tetris IA - Joan L.",
                         sf::Style::None, sf::State::Fullscreen);
     }
 
     ventana_.setFramerateLimit(config_.fpsObjetivo);
+
+    // Establecer vista con resolución de diseño (1920x1080) con letterbox
+    actualizarVista(ventana_.getSize());
 
     // Crear menú principal
     crearMenuPrincipal();
@@ -109,6 +112,11 @@ void Aplicacion::procesarEventos() {
         if (evento->is<sf::Event::Closed>()) {
             ventana_.close();
             return;
+        }
+
+        // Redimensionar: actualizar la vista para mantener aspecto
+        if (const auto* resized = evento->getIf<sf::Event::Resized>()) {
+            actualizarVista(resized->size);
         }
 
         if (estadoActual_ == EstadoApp::MENU) {
@@ -208,6 +216,38 @@ void Aplicacion::renderizar() {
 
 bool Aplicacion::cargarFuente() {
     return fuente_.openFromFile(config_.rutaFuente);
+}
+
+void Aplicacion::actualizarVista(sf::Vector2u tamanoVentana) {
+    // Resolución de diseño fija
+    constexpr float disenoAncho = static_cast<float>(VENTANA_ANCHO);
+    constexpr float disenoAlto = static_cast<float>(VENTANA_ALTO);
+    constexpr float aspectoDiseno = disenoAncho / disenoAlto;
+
+    float ventanaAncho = static_cast<float>(tamanoVentana.x);
+    float ventanaAlto = static_cast<float>(tamanoVentana.y);
+    float aspectoVentana = ventanaAncho / ventanaAlto;
+
+    sf::View vista(sf::FloatRect({0, 0}, {disenoAncho, disenoAlto}));
+
+    // Letterbox: ajustar viewport para mantener aspecto
+    float viewportAncho = 1.0f;
+    float viewportAlto = 1.0f;
+    float viewportX = 0.0f;
+    float viewportY = 0.0f;
+
+    if (aspectoVentana > aspectoDiseno) {
+        // Ventana más ancha → barras laterales
+        viewportAncho = aspectoDiseno / aspectoVentana;
+        viewportX = (1.0f - viewportAncho) / 2.0f;
+    } else {
+        // Ventana más alta → barras arriba/abajo
+        viewportAlto = aspectoVentana / aspectoDiseno;
+        viewportY = (1.0f - viewportAlto) / 2.0f;
+    }
+
+    vista.setViewport(sf::FloatRect({viewportX, viewportY}, {viewportAncho, viewportAlto}));
+    ventana_.setView(vista);
 }
 
 } // namespace tetris
