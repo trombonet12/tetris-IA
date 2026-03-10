@@ -9,9 +9,11 @@
 
 #include "../juego/Constantes.h"
 #include "../modos/ModoJuego.h"
+#include "../graficos/Boton.h"
 #include "Configuracion.h"
 #include <SFML/Graphics.hpp>
 #include <memory>
+#include <vector>
 
 namespace tetris {
 
@@ -57,6 +59,9 @@ private:
 
     // Actualiza la vista para mantener aspecto 16:9 con letterbox
     void actualizarVista(sf::Vector2u tamanoVentana);
+
+    // Botones del menú principal (persistentes para recibir eventos de ratón)
+    std::vector<Boton> botonesMenu_;
 };
 
 } // namespace tetris

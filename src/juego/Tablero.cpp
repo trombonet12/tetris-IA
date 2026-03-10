@@ -6,6 +6,7 @@
 // =============================================================================
 #include "juego/Tablero.h"
 #include <algorithm>
+#include <cstdlib>
 
 namespace tetris {
 
@@ -109,7 +110,7 @@ int Tablero::calcularFilaFantasma(const Pieza& pieza) const {
 
 std::vector<float> Tablero::obtenerEstado() const {
     std::vector<float> estado;
-    estado.reserve(NN_TAM_TABLERO + NN_TAM_ALTURAS + NN_TAM_HUECOS);
+    estado.reserve(NN_TAM_TABLERO + NN_TAM_ALTURAS + NN_TAM_HUECOS + NN_TAM_BUMPINESS);
 
     // Tablero aplanado (solo las filas visibles): 0.0 vacía, 1.0 ocupada
     for (int fila = TABLERO_ALTO_OCULTO; fila < TABLERO_ALTO_TOTAL; ++fila) {
@@ -127,6 +128,10 @@ std::vector<float> Tablero::obtenerEstado() const {
     // Número de huecos normalizado
     int huecos = contarHuecos();
     estado.push_back(static_cast<float>(huecos) / (TABLERO_ANCHO * TABLERO_ALTO));
+
+    // Bumpiness normalizada
+    int bumpiness = calcularBumpiness();
+    estado.push_back(static_cast<float>(bumpiness) / (TABLERO_ALTO * (TABLERO_ANCHO - 1)));
 
     return estado;
 }
@@ -168,6 +173,27 @@ float Tablero::obtenerAlturaMedia() const {
         suma += static_cast<float>(a);
     }
     return suma / TABLERO_ANCHO;
+}
+
+int Tablero::calcularBumpiness() const {
+    auto alturas = obtenerAlturas();
+    int bumpiness = 0;
+    for (int col = 0; col < TABLERO_ANCHO - 1; ++col) {
+        bumpiness += std::abs(alturas[col] - alturas[col + 1]);
+    }
+    return bumpiness;
+}
+
+int Tablero::contarFilasCasiCompletas(int minCeldas) const {
+    int count = 0;
+    for (int fila = TABLERO_ALTO_OCULTO; fila < TABLERO_ALTO_TOTAL; ++fila) {
+        int celdas = 0;
+        for (int col = 0; col < TABLERO_ANCHO; ++col) {
+            if (grid_[fila][col] != TipoPieza::NINGUNA) ++celdas;
+        }
+        if (celdas >= minCeldas && celdas < TABLERO_ANCHO) ++count;
+    }
+    return count;
 }
 
 bool Tablero::filaCompleta(int fila) const {

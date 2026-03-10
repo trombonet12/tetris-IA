@@ -9,6 +9,7 @@
 #pragma once
 
 #include "../ia/RedNeuronal.h"
+#include "../juego/Constantes.h"
 #include <SFML/Graphics.hpp>
 #include <vector>
 
@@ -41,7 +42,7 @@ private:
     const sf::Font& fuente_;
 
     // Nombres de las acciones para las etiquetas de salida
-    static const std::array<std::string, 6> NOMBRES_ACCIONES;
+    static const std::array<std::string, NUM_ACCIONES> NOMBRES_ACCIONES;
 
     // Convierte un valor de activación a color (azul negativo → blanco cero → rojo positivo)
     sf::Color colorActivacion(float valor) const;

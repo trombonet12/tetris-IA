@@ -103,8 +103,34 @@ void Aplicacion::cambiarModo(EstadoApp nuevoEstado) {
 }
 
 void Aplicacion::crearMenuPrincipal() {
-    // El menú se renderiza directamente con InterfazUsuario
     estadoActual_ = EstadoApp::MENU;
+
+    // Crear botones persistentes del menú
+    botonesMenu_.clear();
+
+    float btnX = (VENTANA_ANCHO - 300) / 2.0f;
+    float btnY = 280;
+    sf::Vector2f tamBtn(300, 55);
+    float sep = 70;
+
+    Boton btnJugar("1 - Jugar", fuente_, sf::Vector2f(btnX, btnY), tamBtn);
+    btnJugar.alHacerClick([this]() { cambiarModo(EstadoApp::MODO_NORMAL); });
+    botonesMenu_.push_back(std::move(btnJugar));
+
+    Boton btnEntrenar("2 - Entrenar IA", fuente_,
+                       sf::Vector2f(btnX, btnY + sep), tamBtn);
+    btnEntrenar.alHacerClick([this]() { cambiarModo(EstadoApp::MODO_ENTRENAMIENTO); });
+    botonesMenu_.push_back(std::move(btnEntrenar));
+
+    Boton btnVerIA("3 - Ver IA Entrenada", fuente_,
+                    sf::Vector2f(btnX, btnY + sep * 2), tamBtn);
+    btnVerIA.alHacerClick([this]() { cambiarModo(EstadoApp::MODO_IA_ENTRENADA); });
+    botonesMenu_.push_back(std::move(btnVerIA));
+
+    Boton btnSalir("ESC - Salir", fuente_,
+                    sf::Vector2f(btnX, btnY + sep * 3), tamBtn);
+    btnSalir.alHacerClick([this]() { ventana_.close(); });
+    botonesMenu_.push_back(std::move(btnSalir));
 }
 
 void Aplicacion::procesarEventos() {
@@ -120,7 +146,12 @@ void Aplicacion::procesarEventos() {
         }
 
         if (estadoActual_ == EstadoApp::MENU) {
-            // Los botones del menú se gestionan aquí
+            // Procesar botones del menú
+            for (auto& btn : botonesMenu_) {
+                btn.procesarEvento(*evento, ventana_);
+            }
+
+            // Los atajos de teclado del menú
             if (const auto* keyEvent = evento->getIf<sf::Event::KeyPressed>()) {
                 switch (keyEvent->code) {
                     case sf::Keyboard::Key::Num1:
@@ -174,30 +205,9 @@ void Aplicacion::renderizar() {
         ventana_.draw(subtitulo);
 
         // Botones del menú
-        float btnX = (VENTANA_ANCHO - 300) / 2.0f;
-        float btnY = 280;
-        sf::Vector2f tamBtn(300, 55);
-        float sep = 70;
-
-        // Crear botones temporales para el menú
-        Boton btnJugar("1 - Jugar", fuente_, sf::Vector2f(btnX, btnY), tamBtn);
-        btnJugar.alHacerClick([this]() { cambiarModo(EstadoApp::MODO_NORMAL); });
-        btnJugar.dibujar(ventana_);
-
-        Boton btnEntrenar("2 - Entrenar IA", fuente_,
-                           sf::Vector2f(btnX, btnY + sep), tamBtn);
-        btnEntrenar.alHacerClick([this]() { cambiarModo(EstadoApp::MODO_ENTRENAMIENTO); });
-        btnEntrenar.dibujar(ventana_);
-
-        Boton btnVerIA("3 - Ver IA Entrenada", fuente_,
-                        sf::Vector2f(btnX, btnY + sep * 2), tamBtn);
-        btnVerIA.alHacerClick([this]() { cambiarModo(EstadoApp::MODO_IA_ENTRENADA); });
-        btnVerIA.dibujar(ventana_);
-
-        Boton btnSalir("ESC - Salir", fuente_,
-                        sf::Vector2f(btnX, btnY + sep * 3), tamBtn);
-        btnSalir.alHacerClick([this]() { ventana_.close(); });
-        btnSalir.dibujar(ventana_);
+        for (const auto& btn : botonesMenu_) {
+            btn.dibujar(ventana_);
+        }
 
         // Info al pie
         sf::Text info(fuente_, "Controles menu: 1/2/3 + Enter o click | ESC = Salir", 14);

@@ -20,6 +20,7 @@
 #include <iostream>
 #include <cstring>
 #include <chrono>
+#include <filesystem>
 
 namespace tetris {
 
@@ -117,26 +118,11 @@ __global__ void kernelPropagacionAdelante(
         offsetPeso += tamActual * tamSiguiente + tamSiguiente;
     }
 
-    // Aplicar softmax a la capa de salida (hilo 0 solo, salida es pequeña)
+    // Copiar salida directamente (sin softmax — para algoritmos evolutivos
+    // las activaciones raw dan mejor señal de selección que probabilidades)
     if (threadIdx.x == 0) {
-        // Encontrar máximo para estabilidad numérica
-        float maxVal = actual[0];
-        for (int i = 1; i < tamSalida; ++i) {
-            if (actual[i] > maxVal) maxVal = actual[i];
-        }
-
-        // Calcular exponenciales y sumar
-        float sumaExp = 0.0f;
         for (int i = 0; i < tamSalida; ++i) {
-            float exp_val = expf(actual[i] - maxVal);
-            miSalida[i] = exp_val;
-            sumaExp += exp_val;
-        }
-
-        // Normalizar
-        float invSuma = 1.0f / sumaExp;
-        for (int i = 0; i < tamSalida; ++i) {
-            miSalida[i] *= invSuma;
+            miSalida[i] = actual[i];
         }
     }
 }
@@ -300,15 +286,8 @@ static std::vector<float> evaluarCPU_estatico(
         offsetPeso += tamActual * tamSiguiente + tamSiguiente;
     }
 
-    float maxVal = *std::max_element(actual.begin(), actual.end());
-    float sumaExp = 0.0f;
-    for (auto& v : actual) {
-        v = std::exp(v - maxVal);
-        sumaExp += v;
-    }
-    for (auto& v : actual) {
-        v /= sumaExp;
-    }
+    // Devolver salida raw (sin softmax) — consistente con el kernel GPU.
+    // El GA usa argmax para seleccionar acción, no necesita probabilidades.
     return actual;
 }
 
@@ -473,18 +452,7 @@ ActivacionesRed RedNeuronal::obtenerActivaciones(const std::vector<float>& entra
             siguiente[j] = suma;
         }
 
-        // Para la última capa, aplicar softmax
-        if (capa == numCapas - 1) {
-            float maxVal = *std::max_element(siguiente.begin(), siguiente.end());
-            float sumaExp = 0.0f;
-            for (auto& v : siguiente) {
-                v = std::exp(v - maxVal);
-                sumaExp += v;
-            }
-            for (auto& v : siguiente) {
-                v /= sumaExp;
-            }
-        }
+        // Sin softmax — salida raw para selección por argmax en AG evolutivo
 
         result.capas.push_back(siguiente);
         actual = std::move(siguiente);
@@ -542,6 +510,12 @@ void RedNeuronal::inicializarAleatorio(unsigned int semilla) {
 }
 
 bool RedNeuronal::guardar(const std::string& ruta) const {
+    // Asegurar que el directorio padre existe
+    auto dirPadre = std::filesystem::path(ruta).parent_path();
+    if (!dirPadre.empty()) {
+        std::filesystem::create_directories(dirPadre);
+    }
+
     std::ofstream archivo(ruta, std::ios::binary);
     if (!archivo.is_open()) return false;
 

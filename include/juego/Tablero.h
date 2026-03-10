@@ -56,6 +56,12 @@ public:
     // Calcula la altura media del tablero
     float obtenerAlturaMedia() const;
 
+    // Calcula la bumpiness (suma de diferencias absolutas de alturas entre columnas adyacentes)
+    int calcularBumpiness() const;
+
+    // Cuenta filas casi completas (con al menos minCeldas de TABLERO_ANCHO llenas)
+    int contarFilasCasiCompletas(int minCeldas = 8) const;
+
     // Obtiene el grid completo (para renderizado)
     const std::array<std::array<TipoPieza, TABLERO_ANCHO>, TABLERO_ALTO_TOTAL>& obtenerGrid() const {
         return grid_;

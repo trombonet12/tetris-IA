@@ -23,12 +23,12 @@ struct Configuracion {
     std::string rutaFuente;  // Se auto-detecta
 
     // IA
-    std::vector<int> arquitecturaRed = { 218, 128, 64, 32, 16, 6 };
+    std::vector<int> arquitecturaRed = { 237, 128, 64, 7 };
     int tamPoblacion = 100;
-    float tasaMutacion = 0.1f;
-    float sigmaMutacion = 0.3f;
-    float porcentajeElitismo = 0.1f;
-    int tamTorneo = 5;
+    float tasaMutacion = 0.10f;
+    float sigmaMutacion = 0.05f;
+    float porcentajeElitismo = 0.10f;
+    int tamTorneo = 3;
 
     // Guardado automático
     bool autoGuardado = true;

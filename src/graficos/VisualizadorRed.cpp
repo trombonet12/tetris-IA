@@ -16,8 +16,8 @@
 
 namespace tetris {
 
-const std::array<std::string, 6> VisualizadorRed::NOMBRES_ACCIONES = {
-    "Izquierda", "Derecha", "Rotar H", "Rotar AH", "Bajar", "Caer"
+const std::array<std::string, NUM_ACCIONES> VisualizadorRed::NOMBRES_ACCIONES = {
+    "Izquierda", "Derecha", "Rotar H", "Rotar AH", "Bajar", "Caer", "Hold"
 };
 
 VisualizadorRed::VisualizadorRed(const sf::Font& fuente)
@@ -116,7 +116,7 @@ void VisualizadorRed::renderizar(sf::RenderTarget& objetivo, const RedNeuronal& 
     }
 
     // Etiquetas de acciones en la capa de salida
-    if (!layout.empty() && layout.back().size() <= 6) {
+    if (!layout.empty() && layout.back().size() <= static_cast<size_t>(NUM_ACCIONES)) {
         etiqueta.setCharacterSize(12);
         etiqueta.setFillColor(COLOR_TEXTO);
         for (size_t i = 0; i < layout.back().size() && i < NOMBRES_ACCIONES.size(); ++i) {
@@ -163,6 +163,16 @@ void VisualizadorRed::renderizarBarrasAccion(sf::RenderTarget& objetivo,
                                                sf::Vector2f tamano) const {
     if (salida.empty()) return;
 
+    // Normalizar salida raw de la NN a rango 0-1 para visualización (softmax)
+    std::vector<float> probabilidades(salida.size());
+    float maxVal = *std::max_element(salida.begin(), salida.end());
+    float sumaExp = 0.0f;
+    for (size_t i = 0; i < salida.size(); ++i) {
+        probabilidades[i] = std::exp(salida[i] - maxVal);
+        sumaExp += probabilidades[i];
+    }
+    for (auto& v : probabilidades) v /= sumaExp;
+
     int numAcciones = static_cast<int>(salida.size());
     float alturaBarra = (tamano.y - (numAcciones - 1) * 5.0f) / numAcciones;
 
@@ -197,7 +207,7 @@ void VisualizadorRed::renderizarBarrasAccion(sf::RenderTarget& objetivo,
         // Barra de probabilidad
         sf::Color colorBarra = (i == mejorAccion)
             ? sf::Color(80, 200, 80) : sf::Color(80, 80, 140);
-        float anchoBarra = barraAncho * salida[i];
+        float anchoBarra = barraAncho * probabilidades[i];
 
         sf::RectangleShape barra(sf::Vector2f(anchoBarra, alturaBarra));
         barra.setPosition({barraX, y});
@@ -206,7 +216,7 @@ void VisualizadorRed::renderizarBarrasAccion(sf::RenderTarget& objetivo,
 
         // Porcentaje
         std::ostringstream ss;
-        ss << std::fixed << std::setprecision(1) << (salida[i] * 100) << "%";
+        ss << std::fixed << std::setprecision(1) << (probabilidades[i] * 100) << "%";
         sf::Text porcentaje(fuente_, ss.str(), 11);
         porcentaje.setFillColor(COLOR_TEXTO);
         porcentaje.setPosition({barraX + barraAncho + 5, y});

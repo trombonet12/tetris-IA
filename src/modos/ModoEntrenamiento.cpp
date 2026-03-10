@@ -355,19 +355,27 @@ void ModoEntrenamiento::renderizarPanelParametros(sf::RenderTarget& objetivo) co
     // Información de fitness
     ui_.dibujarTexto(objetivo, "Funcion fitness:", sf::Vector2f(x, y), 14, COLOR_TEXTO_TITULO);
     y += 18;
-    ui_.dibujarTexto(objetivo, "+1/pieza colocada", sf::Vector2f(x, y), 12, COLOR_TEXTO);
+    ui_.dibujarTexto(objetivo, "+3/pieza colocada", sf::Vector2f(x, y), 12, COLOR_TEXTO);
     y += 16;
-    ui_.dibujarTexto(objetivo, "+10/linea", sf::Vector2f(x, y), 12, COLOR_TEXTO);
+    ui_.dibujarTexto(objetivo, "+40/linea", sf::Vector2f(x, y), 12, COLOR_TEXTO);
     y += 16;
-    ui_.dibujarTexto(objetivo, "+400/tetris (4 lineas)", sf::Vector2f(x, y), 12,
+    ui_.dibujarTexto(objetivo, "+800/tetris (4 lineas)", sf::Vector2f(x, y), 12,
                       sf::Color(100, 255, 100));
     y += 16;
-    ui_.dibujarTexto(objetivo, "-20 game over prematuro", sf::Vector2f(x, y), 12,
+    ui_.dibujarTexto(objetivo, "+5/fila casi completa", sf::Vector2f(x, y), 12,
+                      sf::Color(100, 255, 100));
+    y += 16;
+    ui_.dibujarTexto(objetivo, "+bonus supervivencia >50p", sf::Vector2f(x, y), 12,
+                      sf::Color(100, 200, 255));
+    y += 16;
+    ui_.dibujarTexto(objetivo, "-100 game over prematuro", sf::Vector2f(x, y), 12,
                       sf::Color(255, 100, 100));
     y += 16;
-    ui_.dibujarTexto(objetivo, "-0.5 * alt. media", sf::Vector2f(x, y), 12, COLOR_TEXTO);
+    ui_.dibujarTexto(objetivo, "Penaliz. promedio partida:", sf::Vector2f(x, y), 12,
+                      sf::Color(255, 180, 100));
     y += 16;
-    ui_.dibujarTexto(objetivo, "-0.3 * huecos", sf::Vector2f(x, y), 12, COLOR_TEXTO);
+    ui_.dibujarTexto(objetivo, "  alt/huecos/bumpiness", sf::Vector2f(x, y), 12,
+                      sf::Color(255, 180, 100));
 }
 
 void ModoEntrenamiento::renderizarPanelEstadisticas(sf::RenderTarget& objetivo) const {

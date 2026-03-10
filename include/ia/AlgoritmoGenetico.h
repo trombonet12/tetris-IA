@@ -8,6 +8,7 @@
 #pragma once
 
 #include "RedNeuronal.h"
+#include "../juego/Constantes.h"
 #include <vector>
 #include <random>
 #include <functional>
@@ -63,6 +64,8 @@ private:
     float porcentajeElitismo_;
     int tamTorneo_;
     int generacionActual_;
+    int generacionesSinMejora_;
+    float mejorFitnessHistorico_;
     std::mt19937 rng_;
 
     // Selección por torneo: devuelve el índice del ganador
@@ -76,6 +79,15 @@ private:
 
     // Mutación gaussiana de los pesos
     void mutar(std::vector<float>& pesos);
+
+    // Mutación con sigma y tasa específicos (para adaptación dinámica)
+    void mutarConSigma(std::vector<float>& pesos, float sigma, float tasa);
+
+    // Cruce de punto simple: divide los pesos en un punto aleatorio
+    std::vector<float> crucePuntoSimple(
+        const std::vector<float>& padre1,
+        const std::vector<float>& padre2
+    );
 };
 
 } // namespace tetris

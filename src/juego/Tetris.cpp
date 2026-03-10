@@ -87,6 +87,10 @@ void Tetris::ejecutarAccion(Accion accion) {
             break;
         }
 
+        case Accion::HOLD:
+            realizarHold();
+            break;
+
         default:
             break;
     }
@@ -225,13 +229,26 @@ std::vector<float> Tetris::obtenerEntradaIA() const {
         entrada.push_back(static_cast<int>(siguiente) == i ? 1.0f : 0.0f);
     }
 
-    // 5. Alturas por columna normalizadas (10)
+    // 5. Pieza en hold (one-hot, 7 valores; todos 0 si no hay pieza en hold)
+    for (int i = 0; i < NUM_TIPOS_PIEZA; ++i) {
+        entrada.push_back(
+            (piezaHold_ != TipoPieza::NINGUNA && static_cast<int>(piezaHold_) == i)
+            ? 1.0f : 0.0f);
+    }
+
+    // 6. Hold disponible este turno (1 = puede hacer hold, 0 = ya se usó)
+    entrada.push_back(holdUsado_ ? 0.0f : 1.0f);
+
+    // 7. Alturas por columna normalizadas (10)
     for (int i = 0; i < NN_TAM_ALTURAS; ++i) {
         entrada.push_back(estadoTablero[NN_TAM_TABLERO + i]);
     }
 
-    // 6. Huecos normalizado (1)
+    // 8. Huecos normalizado (1)
     entrada.push_back(estadoTablero[NN_TAM_TABLERO + NN_TAM_ALTURAS]);
+
+    // 9. Bumpiness normalizada (1)
+    entrada.push_back(estadoTablero[NN_TAM_TABLERO + NN_TAM_ALTURAS + NN_TAM_HUECOS]);
 
     return entrada;
 }
@@ -241,6 +258,14 @@ float Tetris::calcularFitness() const {
 
     // Recompensa por supervivencia (piezas colocadas) — señal principal temprana
     fitness += stats_.piezasColocadas * FITNESS_POR_PIEZA;
+
+    // Bonus progresivo por supervivencia: recompensar partidas largas
+    if (stats_.piezasColocadas > 50) {
+        fitness += (stats_.piezasColocadas - 50) * FITNESS_BONUS_SUPERVIVENCIA_50;
+    }
+    if (stats_.piezasColocadas > 200) {
+        fitness += (stats_.piezasColocadas - 200) * FITNESS_BONUS_SUPERVIVENCIA_200;
+    }
 
     // Recompensa por líneas limpiadas
     fitness += stats_.lineasTotales * FITNESS_POR_LINEA;
@@ -253,11 +278,22 @@ float Tetris::calcularFitness() const {
         fitness += FITNESS_PENALIZACION_GAME_OVER;
     }
 
-    // Penalización por altura media del tablero
-    fitness += tablero_.obtenerAlturaMedia() * FITNESS_PENALIZACION_ALTURA;
+    // Penalizaciones basadas en PROMEDIOS REALES durante la partida
+    // Un agente que mantiene altura promedio 5 recibe siempre la misma penalización,
+    // sin importar cuántas piezas colocó. Así no se penaliza la supervivencia.
+    if (stats_.piezasColocadas > 0) {
+        float invPiezas = 1.0f / stats_.piezasColocadas;
+        float avgAltura = stats_.sumaAltura * invPiezas;
+        float avgHuecos = stats_.sumaHuecos * invPiezas;
+        float avgBumpiness = stats_.sumaBumpiness * invPiezas;
 
-    // Penalización por huecos en el tablero
-    fitness += tablero_.contarHuecos() * FITNESS_POR_HUECO;
+        fitness += avgAltura * FITNESS_PENALIZACION_ALTURA;
+        fitness += avgHuecos * FITNESS_POR_HUECO;
+        fitness += avgBumpiness * FITNESS_PENALIZACION_BUMPINESS;
+    }
+
+    // Recompensa por filas casi completas (estado actual del tablero)
+    fitness += tablero_.contarFilasCasiCompletas() * FITNESS_POR_FILA_CASI_COMPLETA;
 
     return fitness;
 }
@@ -319,6 +355,13 @@ void Tetris::fijarPieza() {
 
     // Limpiar líneas completas
     int lineas = tablero_.limpiarLineas();
+
+    // Acumular métricas del tablero DESPUÉS de limpiar líneas
+    // (refleja la calidad real del tablero tras cada pieza)
+    stats_.sumaHuecos += static_cast<float>(tablero_.contarHuecos());
+    stats_.sumaAltura += tablero_.obtenerAlturaMedia();
+    stats_.sumaBumpiness += static_cast<float>(tablero_.calcularBumpiness());
+
     if (lineas > 0) {
         stats_.lineasTotales += lineas;
 

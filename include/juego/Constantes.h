@@ -54,6 +54,7 @@ enum class Accion : uint8_t {
     ROTAR_ANTIHORARIO,
     BAJAR_SUAVE,
     CAIDA_DURA,    // Hard drop
+    HOLD,          // Intercambiar pieza con hold
     NUM_ACCIONES
 };
 constexpr int NUM_ACCIONES = static_cast<int>(Accion::NUM_ACCIONES);
@@ -216,36 +217,48 @@ inline const std::array<std::array<Coord, 5>, 8> WALL_KICKS_I = {{
 // Entrada: tablero aplanado (200) + tipo pieza actual one-hot (7)
 //        + posición pieza: columna, fila, rotación (3)
 //        + pieza siguiente one-hot (7)
-//        + alturas por columna normalizadas (10) + huecos normalizado (1) = 228
+//        + alturas por columna normalizadas (10) + huecos normalizado (1)
+//        + bumpiness normalizada (1) = 229
 constexpr int NN_TAM_TABLERO = TABLERO_ANCHO * TABLERO_ALTO;     // 200
 constexpr int NN_TAM_PIEZA_ONEHOT = NUM_TIPOS_PIEZA;              // 7
 constexpr int NN_TAM_POSICION = 3;                                // col, fila, rotación
 constexpr int NN_TAM_SIGUIENTE = NUM_TIPOS_PIEZA;                 // 7 (next piece one-hot)
+constexpr int NN_TAM_HOLD_ONEHOT = NUM_TIPOS_PIEZA;               // 7 (hold piece one-hot)
+constexpr int NN_TAM_HOLD_DISPONIBLE = 1;                          // 1 (puede hacer hold?)
 constexpr int NN_TAM_ALTURAS = TABLERO_ANCHO;                     // 10
 constexpr int NN_TAM_HUECOS = 1;                                  // 1
+constexpr int NN_TAM_BUMPINESS = 1;                                // 1
 constexpr int NN_TAM_ENTRADA = NN_TAM_TABLERO + NN_TAM_PIEZA_ONEHOT
                              + NN_TAM_POSICION + NN_TAM_SIGUIENTE
-                             + NN_TAM_ALTURAS + NN_TAM_HUECOS;   // 228
-constexpr int NN_TAM_SALIDA = NUM_ACCIONES;                       // 6
+                             + NN_TAM_HOLD_ONEHOT + NN_TAM_HOLD_DISPONIBLE
+                             + NN_TAM_ALTURAS + NN_TAM_HUECOS
+                             + NN_TAM_BUMPINESS;                  // 237
+constexpr int NN_TAM_SALIDA = NUM_ACCIONES;                       // 7
 
-// Arquitectura por defecto de la red neuronal
-inline const std::vector<int> NN_ARQUITECTURA_DEFECTO = { 228, 64, 6 };
+// Arquitectura por defecto de la red neuronal (2 capas ocultas)
+inline const std::vector<int> NN_ARQUITECTURA_DEFECTO = { 237, 128, 64, 7 };
 
 // ---- Parámetros del algoritmo genético (por defecto) ----
 constexpr int AG_POBLACION_DEFECTO = 100;
-constexpr float AG_TASA_MUTACION = 0.15f;
-constexpr float AG_SIGMA_MUTACION = 0.4f;
-constexpr float AG_PORCENTAJE_ELITISMO = 0.15f;
-constexpr int AG_TAMANO_TORNEO = 5;
+constexpr float AG_TASA_MUTACION = 0.10f;       // Proporcional para acumular mejoras
+constexpr float AG_SIGMA_MUTACION = 0.05f;      // Proporcional a escala Xavier (~0.07-0.10)
+constexpr float AG_PORCENTAJE_ELITISMO = 0.10f;
+constexpr int AG_TAMANO_TORNEO = 3;              // Menos presión de selección, más diversidad
 
 // ---- Fitness ----
-constexpr float FITNESS_POR_LINEA = 10.0f;
-constexpr float FITNESS_POR_TETRIS = 400.0f;
-constexpr float FITNESS_POR_PIEZA = 1.0f;
-constexpr float FITNESS_PENALIZACION_GAME_OVER = -20.0f;
-constexpr float FITNESS_PENALIZACION_ALTURA = -0.5f;
-constexpr float FITNESS_POR_HUECO = -0.3f;
+constexpr float FITNESS_POR_LINEA = 40.0f;                        // Limpiar líneas es el objetivo principal
+constexpr float FITNESS_POR_TETRIS = 800.0f;                      // Tetris (4 líneas) es el gold standard
+constexpr float FITNESS_POR_PIEZA = 3.0f;                         // Supervivencia: señal principal temprana
+constexpr float FITNESS_PENALIZACION_GAME_OVER = -100.0f;         // Penalizar muerte prematura
+constexpr float FITNESS_PENALIZACION_ALTURA = -1.5f;
+constexpr float FITNESS_POR_HUECO = -8.0f;                        // Huecos: el mayor problema en mal juego
+constexpr float FITNESS_PENALIZACION_BUMPINESS = -0.5f;
+constexpr float FITNESS_POR_FILA_CASI_COMPLETA = 5.0f;
 constexpr int FITNESS_PIEZAS_MINIMAS = 30;
+
+// Bonus progresivo por supervivencia
+constexpr float FITNESS_BONUS_SUPERVIVENCIA_50 = 0.5f;            // Extra por pieza después de 50 piezas
+constexpr float FITNESS_BONUS_SUPERVIVENCIA_200 = 1.0f;           // Extra por pieza después de 200 piezas
 
 // ---- Velocidades de simulación ----
 constexpr float VELOCIDAD_X1 = 1.0f;
@@ -257,5 +270,7 @@ constexpr float VELOCIDAD_MAX = 1000.0f;
 // ---- Límite anti-bucle para la IA ----
 // Máximo de acciones por pieza antes de forzar caída dura
 constexpr int MAX_ACCIONES_POR_PIEZA = 80;
+// Acciones que la IA puede tomar entre cada paso de gravedad
+constexpr int IA_ACCIONES_POR_GRAVEDAD = 4;
 
 } // namespace tetris

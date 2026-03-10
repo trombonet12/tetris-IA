@@ -55,8 +55,11 @@ void Agente::jugarPaso() {
     // 5. Ejecutar la acción en el juego
     tetris_.ejecutarAccion(ultimaAccion_);
 
-    // 6. Avanzar un paso lógico (gravedad)
-    tetris_.ejecutarPasoLogico();
+    // 6. Solo aplicar gravedad cada IA_ACCIONES_POR_GRAVEDAD acciones
+    //    Esto da tiempo a la IA para rotar y posicionar antes de que caiga
+    if (accionesPiezaActual_ % IA_ACCIONES_POR_GRAVEDAD == 0) {
+        tetris_.ejecutarPasoLogico();
+    }
 }
 
 void Agente::reiniciar(unsigned int semilla) {

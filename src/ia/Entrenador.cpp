@@ -256,7 +256,10 @@ void Entrenador::simularGeneracion() {
 
                         agentes_[idx].obtenerTetris().ejecutarAccion(
                             static_cast<Accion>(mejorAccion));
-                        agentes_[idx].obtenerTetris().ejecutarPasoLogico();
+                        // Solo aplicar gravedad cada N acciones para dar tiempo a rotar/posicionar
+                        if (agentes_[idx].accionesPiezaActual_ % IA_ACCIONES_POR_GRAVEDAD == 0) {
+                            agentes_[idx].obtenerTetris().ejecutarPasoLogico();
+                        }
                     }
                 }
 

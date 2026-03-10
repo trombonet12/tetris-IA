@@ -25,6 +25,11 @@ struct EstadisticasPartida {
     int piezasColocadas = 0;
     float tiempoSupervivencia = 0.0f;
     std::array<int, 4> lineasPorTipo = {0, 0, 0, 0}; // 1, 2, 3, 4 líneas
+
+    // Métricas acumuladas del tablero (sumadas tras cada pieza colocada)
+    float sumaHuecos = 0.0f;
+    float sumaAltura = 0.0f;
+    float sumaBumpiness = 0.0f;
 };
 
 class Tetris {
