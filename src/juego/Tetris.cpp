@@ -200,100 +200,190 @@ void Tetris::realizarHold() {
 }
 
 std::vector<float> Tetris::obtenerEntradaIA() const {
-    std::vector<float> entrada;
-    entrada.reserve(NN_TAM_ENTRADA);
-
-    // 1. Estado del tablero (200 valores)
+    // Legacy: devuelve las features del tablero actual (sin placement)
+    // Usado para visualización de la red. La IA real usa enumerarPosiciones().
     auto estadoTablero = tablero_.obtenerEstado();
-    // obtenerEstado() ya incluye tablero + alturas + huecos = 200 + 10 + 1 = 211
-    // Necesitamos separar para añadir la pieza one-hot en medio
+    return estadoTablero;
+}
 
-    // Tablero aplanado (200)
-    for (int i = 0; i < NN_TAM_TABLERO; ++i) {
-        entrada.push_back(estadoTablero[i]);
+std::vector<PosicionIA> Tetris::enumerarPosiciones() const {
+    std::vector<PosicionIA> posiciones;
+    if (estado_ != EstadoJuego::JUGANDO) return posiciones;
+
+    // Función auxiliar para enumerar posiciones de una pieza dada
+    auto enumerar = [&](TipoPieza tipo, bool esHold) {
+        if (tipo == TipoPieza::NINGUNA) return;
+
+        int numRotaciones = (tipo == TipoPieza::O) ? 1 : 4;
+        for (int rot = 0; rot < numRotaciones; ++rot) {
+            const auto& forma = FORMAS[static_cast<int>(tipo)][rot];
+
+            // Calcular rango de columnas válidas para esta rotación
+            int minCol = TABLERO_ANCHO, maxCol = 0;
+            for (const auto& celda : forma) {
+                minCol = std::min(minCol, celda.col);
+                maxCol = std::max(maxCol, celda.col);
+            }
+
+            for (int col = -minCol; col < TABLERO_ANCHO - maxCol; ++col) {
+                // Verificar que la posición de entrada no colisiona
+                bool valida = true;
+                for (const auto& celda : forma) {
+                    int c = celda.col + col;
+                    int f = celda.fila; // Fila 0 = arriba del tablero
+                    if (c < 0 || c >= TABLERO_ANCHO) { valida = false; break; }
+                    if (f >= 0 && f < TABLERO_ALTO_TOTAL &&
+                        tablero_.obtenerCelda(f, c) != TipoPieza::NINGUNA) {
+                        valida = false; break;
+                    }
+                }
+                if (!valida) continue;
+
+                auto features = tablero_.simularColocacion(tipo, rot, col);
+                // simularColocacion devuelve features con valores 0 si posición inválida
+                // Verificar que al menos alturaAterrizaje > 0 (se pudo colocar)
+                PosicionIA pos;
+                pos.rotacion = rot;
+                pos.columna = col;
+                pos.usarHold = esHold;
+                pos.features = features;
+                posiciones.push_back(pos);
+            }
+        }
+    };
+
+    // Enumerar posiciones con pieza actual
+    enumerar(piezaActual_.obtenerTipo(), false);
+
+    // Enumerar posiciones con hold (si disponible)
+    if (!holdUsado_) {
+        if (piezaHold_ != TipoPieza::NINGUNA) {
+            enumerar(piezaHold_, true);
+        } else if (!bolsa_.empty()) {
+            // Si no hay pieza en hold, usar hold significa tomar la siguiente de la bolsa
+            enumerar(bolsa_.front(), true);
+        }
     }
 
-    // 2. Tipo de pieza actual (one-hot, 7 valores)
-    for (int i = 0; i < NUM_TIPOS_PIEZA; ++i) {
-        entrada.push_back(static_cast<int>(piezaActual_.obtenerTipo()) == i ? 1.0f : 0.0f);
+    return posiciones;
+}
+
+bool Tetris::ejecutarColocacion(int rotacion, int columna, bool usarHold) {
+    if (estado_ != EstadoJuego::JUGANDO) return false;
+
+    // Si se usa hold, primero intercambiar
+    if (usarHold) {
+        realizarHold();
+        if (estado_ != EstadoJuego::JUGANDO) return false;
     }
 
-    // 3. Posición de la pieza actual (3 valores normalizados)
-    entrada.push_back(static_cast<float>(piezaActual_.obtenerColumna()) / TABLERO_ANCHO);
-    entrada.push_back(static_cast<float>(piezaActual_.obtenerFila()) / TABLERO_ALTO_TOTAL);
-    entrada.push_back(static_cast<float>(piezaActual_.obtenerRotacion()) / 4.0f);
-
-    // 4. Pieza siguiente (one-hot, 7 valores)
-    TipoPieza siguiente = bolsa_.empty() ? TipoPieza::NINGUNA : bolsa_.front();
-    for (int i = 0; i < NUM_TIPOS_PIEZA; ++i) {
-        entrada.push_back(static_cast<int>(siguiente) == i ? 1.0f : 0.0f);
+    // Establecer rotación
+    int rotActual = piezaActual_.obtenerRotacion();
+    int rotDeseada = ((rotacion % 4) + 4) % 4;
+    while (rotActual != rotDeseada) {
+        piezaActual_.rotar(1);
+        if (tablero_.verificarColision(piezaActual_)) {
+            // Intentar wall kicks
+            piezaActual_.rotar(-1);
+            if (!intentarRotacion(1)) {
+                return false; // No se puede rotar
+            }
+        }
+        rotActual = piezaActual_.obtenerRotacion();
     }
 
-    // 5. Pieza en hold (one-hot, 7 valores; todos 0 si no hay pieza en hold)
-    for (int i = 0; i < NUM_TIPOS_PIEZA; ++i) {
-        entrada.push_back(
-            (piezaHold_ != TipoPieza::NINGUNA && static_cast<int>(piezaHold_) == i)
-            ? 1.0f : 0.0f);
+    // Mover a la columna deseada
+    int colActual = piezaActual_.obtenerColumna();
+    while (colActual != columna) {
+        int dc = (columna > colActual) ? 1 : -1;
+        piezaActual_.mover(0, dc);
+        if (tablero_.verificarColision(piezaActual_)) {
+            piezaActual_.mover(0, -dc);
+            return false; // No se puede mover
+        }
+        colActual = piezaActual_.obtenerColumna();
     }
 
-    // 6. Hold disponible este turno (1 = puede hacer hold, 0 = ya se usó)
-    entrada.push_back(holdUsado_ ? 0.0f : 1.0f);
+    // Hard drop
+    int filaFantasma = tablero_.calcularFilaFantasma(piezaActual_);
+    piezaActual_.establecerPosicion(filaFantasma, piezaActual_.obtenerColumna());
+    fijarPieza();
 
-    // 7. Alturas por columna normalizadas (10)
-    for (int i = 0; i < NN_TAM_ALTURAS; ++i) {
-        entrada.push_back(estadoTablero[NN_TAM_TABLERO + i]);
+    return true;
+}
+
+bool Tetris::prepararColocacion(int rotacion, int columna, bool usarHold) {
+    if (estado_ != EstadoJuego::JUGANDO) return false;
+
+    if (usarHold) {
+        realizarHold();
+        if (estado_ != EstadoJuego::JUGANDO) return false;
     }
 
-    // 8. Huecos normalizado (1)
-    entrada.push_back(estadoTablero[NN_TAM_TABLERO + NN_TAM_ALTURAS]);
+    // Establecer rotación
+    int rotActual = piezaActual_.obtenerRotacion();
+    int rotDeseada = ((rotacion % 4) + 4) % 4;
+    while (rotActual != rotDeseada) {
+        piezaActual_.rotar(1);
+        if (tablero_.verificarColision(piezaActual_)) {
+            piezaActual_.rotar(-1);
+            if (!intentarRotacion(1)) {
+                return false;
+            }
+        }
+        rotActual = piezaActual_.obtenerRotacion();
+    }
 
-    // 9. Bumpiness normalizada (1)
-    entrada.push_back(estadoTablero[NN_TAM_TABLERO + NN_TAM_ALTURAS + NN_TAM_HUECOS]);
+    // Mover a la columna deseada
+    int colActual = piezaActual_.obtenerColumna();
+    while (colActual != columna) {
+        int dc = (columna > colActual) ? 1 : -1;
+        piezaActual_.mover(0, dc);
+        if (tablero_.verificarColision(piezaActual_)) {
+            piezaActual_.mover(0, -dc);
+            return false;
+        }
+        colActual = piezaActual_.obtenerColumna();
+    }
 
-    return entrada;
+    // Actualizar fantasma pero NO hacer hard drop
+    actualizarFantasma();
+    return true;
+}
+
+bool Tetris::descenderUnPaso() {
+    if (estado_ != EstadoJuego::JUGANDO) return false;
+
+    piezaActual_.mover(1, 0);
+    if (tablero_.verificarColision(piezaActual_)) {
+        piezaActual_.mover(-1, 0);
+        fijarPieza();
+        return false; // aterrizó
+    }
+    return true; // sigue cayendo
 }
 
 float Tetris::calcularFitness() const {
     float fitness = 0.0f;
 
-    // Recompensa por supervivencia (piezas colocadas) — señal principal temprana
+    // Señal principal: supervivencia (piezas colocadas)
     fitness += stats_.piezasColocadas * FITNESS_POR_PIEZA;
 
-    // Bonus progresivo por supervivencia: recompensar partidas largas
-    if (stats_.piezasColocadas > 50) {
-        fitness += (stats_.piezasColocadas - 50) * FITNESS_BONUS_SUPERVIVENCIA_50;
-    }
-    if (stats_.piezasColocadas > 200) {
-        fitness += (stats_.piezasColocadas - 200) * FITNESS_BONUS_SUPERVIVENCIA_200;
+    // Bonus progresivo por supervivencia larga
+    if (stats_.piezasColocadas > 100) {
+        fitness += (stats_.piezasColocadas - 100) * FITNESS_BONUS_SUPERVIVENCIA_100;
     }
 
-    // Recompensa por líneas limpiadas
+    // Líneas limpiadas
     fitness += stats_.lineasTotales * FITNESS_POR_LINEA;
 
-    // Recompensa masiva por Tetris (4 líneas a la vez)
+    // Tetris (4 líneas a la vez)
     fitness += stats_.tetrisCount * FITNESS_POR_TETRIS;
 
     // Penalización por game over prematuro
     if (estado_ == EstadoJuego::GAME_OVER && stats_.piezasColocadas < FITNESS_PIEZAS_MINIMAS) {
         fitness += FITNESS_PENALIZACION_GAME_OVER;
     }
-
-    // Penalizaciones basadas en PROMEDIOS REALES durante la partida
-    // Un agente que mantiene altura promedio 5 recibe siempre la misma penalización,
-    // sin importar cuántas piezas colocó. Así no se penaliza la supervivencia.
-    if (stats_.piezasColocadas > 0) {
-        float invPiezas = 1.0f / stats_.piezasColocadas;
-        float avgAltura = stats_.sumaAltura * invPiezas;
-        float avgHuecos = stats_.sumaHuecos * invPiezas;
-        float avgBumpiness = stats_.sumaBumpiness * invPiezas;
-
-        fitness += avgAltura * FITNESS_PENALIZACION_ALTURA;
-        fitness += avgHuecos * FITNESS_POR_HUECO;
-        fitness += avgBumpiness * FITNESS_PENALIZACION_BUMPINESS;
-    }
-
-    // Recompensa por filas casi completas (estado actual del tablero)
-    fitness += tablero_.contarFilasCasiCompletas() * FITNESS_POR_FILA_CASI_COMPLETA;
 
     return fitness;
 }

@@ -62,6 +62,19 @@ public:
     // Cuenta filas casi completas (con al menos minCeldas de TABLERO_ANCHO llenas)
     int contarFilasCasiCompletas(int minCeldas = 8) const;
 
+    // Simula colocar una pieza y devuelve las características del tablero resultante
+    // No modifica el tablero actual (trabaja sobre una copia interna)
+    CaracteristicasTablero simularColocacion(TipoPieza tipo, int rotacion, int columna) const;
+
+    // Calcula transiciones de columna (cambios lleno<->vacío en vertical)
+    int calcularTransicionesColumna() const;
+
+    // Calcula transiciones de fila (cambios lleno<->vacío en horizontal)
+    int calcularTransicionesFila() const;
+
+    // Calcula la suma de profundidades de pozos
+    int calcularPozos() const;
+
     // Obtiene el grid completo (para renderizado)
     const std::array<std::array<TipoPieza, TABLERO_ANCHO>, TABLERO_ALTO_TOTAL>& obtenerGrid() const {
         return grid_;

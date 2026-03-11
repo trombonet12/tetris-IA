@@ -17,6 +17,7 @@
 #include <atomic>
 #include <mutex>
 #include <functional>
+#include <random>
 
 namespace tetris {
 
@@ -78,10 +79,10 @@ public:
     const AlgoritmoGenetico& obtenerAlgoritmoGenetico() const { return ag_; }
 
     // ---- Guardado ----
-    // Guarda los pesos del mejor agente de la generación actual
+    // Guarda los pesos del mejor agente de la generación actual (con metadatos)
     bool guardarMejorModelo(const std::string& ruta) const;
 
-    // Carga pesos y los aplica a toda la población (para continuar entrenamiento)
+    // Carga pesos y los aplica a toda la población (con diversidad por mutación)
     bool cargarModelo(const std::string& ruta);
 
     // ---- Velocidad de simulación ----
@@ -116,6 +117,9 @@ private:
     // Hilo de entrenamiento
     std::unique_ptr<std::thread> hiloEntrenamiento_;
     mutable std::mutex mutexDatos_;
+
+    // RNG para seeds aleatorias de cada generación
+    std::mt19937 rng_;
 
     // Bucle principal del hilo de entrenamiento
     void bucleEntrenamiento();

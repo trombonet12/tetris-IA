@@ -65,7 +65,7 @@ public:
 
     // ---- Para la IA ----
 
-    // Obtiene el vector de entrada completo para la red neuronal
+    // Obtiene el vector de entrada completo para la red neuronal (legacy, usado por renderizado)
     std::vector<float> obtenerEntradaIA() const;
 
     // Calcula la aptitud (fitness) acumulada de esta partida
@@ -76,6 +76,25 @@ public:
 
     // Activa/desactiva el hold de pieza
     void realizarHold();
+
+    // ---- Para la IA (evaluador de posiciones) ----
+
+    // Enumera todas las posiciones posibles para la pieza actual (y hold si disponible)
+    std::vector<PosicionIA> enumerarPosiciones() const;
+
+    // Ejecuta una colocación directa: rota y mueve la pieza, luego hard drop
+    // Devuelve true si la colocación fue exitosa
+    bool ejecutarColocacion(int rotacion, int columna, bool usarHold = false);
+
+    // Prepara la pieza en la rotación y columna deseadas SIN hacer hard drop
+    // La pieza queda arriba lista para caer visualmente. Devuelve true si fue posible.
+    bool prepararColocacion(int rotacion, int columna, bool usarHold = false);
+
+    // Baja la pieza un paso (una fila). Devuelve true si sigue cayendo, false si aterrizó.
+    bool descenderUnPaso();
+
+    // Obtiene acceso al tablero mutable (para Agente)
+    Tablero& obtenerTableroMut() { return tablero_; }
 
 private:
     Tablero tablero_;

@@ -93,8 +93,8 @@ std::vector<std::vector<float>> AlgoritmoGenetico::evolucionar(
     while (static_cast<int>(nuevaGeneracion.size()) < tamPoblacion - numAleatorios) {
         int idxPadre1 = seleccionTorneo(fitnesses);
 
-        // 30% probabilidad de crossover de punto simple
-        if (probCruce(rng_) < 0.3f) {
+        // Crossover de punto simple con probabilidad configurable
+        if (probCruce(rng_) < AG_PROBABILIDAD_CRUCE) {
             int idxPadre2 = seleccionTorneo(fitnesses);
             auto hijo = crucePuntoSimple(poblacionConFitness[idxPadre1].first,
                                          poblacionConFitness[idxPadre2].first);

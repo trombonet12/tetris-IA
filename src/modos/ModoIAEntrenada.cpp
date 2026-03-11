@@ -109,7 +109,13 @@ void ModoIAEntrenada::actualizar(float dt) {
         timerPaso_ -= intervalo;
 
         if (agente_->estaActivo()) {
-            agente_->jugarPaso();
+            if (!agente_->estaAnimando()) {
+                // IA decide la siguiente pieza y la prepara arriba
+                agente_->decidirSiguientePieza();
+            } else {
+                // Bajar la pieza una fila
+                agente_->avanzarCaida();
+            }
 
             // Actualizar activaciones para visualización
             auto entrada = agente_->obtenerTetris().obtenerEntradaIA();
@@ -219,7 +225,14 @@ void ModoIAEntrenada::buscarModelos() {
 void ModoIAEntrenada::cargarModelo(const std::string& ruta) {
     agente_ = std::make_unique<Agente>(NN_ARQUITECTURA_DEFECTO);
 
-    if (agente_->obtenerRed().cargar(ruta)) {
+    // Intentar GestorModelos primero, luego formato antiguo
+    MetadatosModelo meta;
+    bool cargado = GestorModelos::cargar(ruta, agente_->obtenerRed(), meta);
+    if (!cargado) {
+        cargado = agente_->obtenerRed().cargar(ruta);
+    }
+
+    if (cargado) {
         rutaModelo_ = ruta;
         modeloCargado_ = true;
         timerPaso_ = 0.0f;
@@ -270,15 +283,27 @@ void ModoIAEntrenada::renderizarPanelIA(sf::RenderTarget& objetivo) const {
                               sf::Vector2f(panelX, panelY));
     panelY += 35;
 
-    // Barras de acción
-    ui_.dibujarTexto(objetivo, "Decisiones de la IA:",
+    // Info de posiciones evaluadas
+    ui_.dibujarTexto(objetivo, "Evaluador posiciones:",
                       sf::Vector2f(panelX, panelY), 16, COLOR_TEXTO_TITULO);
     panelY += 22;
 
-    vizRed_.renderizarBarrasAccion(objetivo, agente_->obtenerUltimaSalida(),
-                                    sf::Vector2f(panelX, panelY),
-                                    sf::Vector2f(400, 170));
-    panelY += 190;
+    ss.str(""); ss << "Score elegido: " << agente_->obtenerUltimoScore();
+    ui_.dibujarTexto(objetivo, ss.str(),
+                      sf::Vector2f(panelX, panelY), 14, sf::Color(100, 255, 100));
+    panelY += 20;
+
+    const auto& pos = agente_->obtenerUltimaPosicion();
+    ss.str(""); ss << "Rot: " << pos.rotacion << "  Col: " << pos.columna
+                    << (pos.usarHold ? "  (Hold)" : "");
+    ui_.dibujarTexto(objetivo, ss.str(),
+                      sf::Vector2f(panelX, panelY), 14, COLOR_TEXTO);
+    panelY += 20;
+
+    ss.str(""); ss << "Posiciones evaluadas: " << agente_->obtenerPosicionesEvaluadas().size();
+    ui_.dibujarTexto(objetivo, ss.str(),
+                      sf::Vector2f(panelX, panelY), 14, COLOR_TEXTO);
+    panelY += 30;
 
     // Red neuronal
     float redAlto = VENTANA_ALTO - panelY - 80;

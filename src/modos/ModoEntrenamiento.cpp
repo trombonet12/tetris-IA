@@ -355,27 +355,24 @@ void ModoEntrenamiento::renderizarPanelParametros(sf::RenderTarget& objetivo) co
     // Información de fitness
     ui_.dibujarTexto(objetivo, "Funcion fitness:", sf::Vector2f(x, y), 14, COLOR_TEXTO_TITULO);
     y += 18;
-    ui_.dibujarTexto(objetivo, "+3/pieza colocada", sf::Vector2f(x, y), 12, COLOR_TEXTO);
+    ss.str(""); ss << "+" << FITNESS_POR_PIEZA << "/pieza colocada";
+    ui_.dibujarTexto(objetivo, ss.str(), sf::Vector2f(x, y), 12, COLOR_TEXTO);
     y += 16;
-    ui_.dibujarTexto(objetivo, "+40/linea", sf::Vector2f(x, y), 12, COLOR_TEXTO);
+    ss.str(""); ss << "+" << FITNESS_POR_LINEA << "/linea";
+    ui_.dibujarTexto(objetivo, ss.str(), sf::Vector2f(x, y), 12, COLOR_TEXTO);
     y += 16;
-    ui_.dibujarTexto(objetivo, "+800/tetris (4 lineas)", sf::Vector2f(x, y), 12,
+    ss.str(""); ss << "+" << FITNESS_POR_TETRIS << "/tetris (4 lineas)";
+    ui_.dibujarTexto(objetivo, ss.str(), sf::Vector2f(x, y), 12,
                       sf::Color(100, 255, 100));
     y += 16;
-    ui_.dibujarTexto(objetivo, "+5/fila casi completa", sf::Vector2f(x, y), 12,
-                      sf::Color(100, 255, 100));
-    y += 16;
-    ui_.dibujarTexto(objetivo, "+bonus supervivencia >50p", sf::Vector2f(x, y), 12,
+    ui_.dibujarTexto(objetivo, "+bonus supervivencia", sf::Vector2f(x, y), 12,
                       sf::Color(100, 200, 255));
     y += 16;
-    ui_.dibujarTexto(objetivo, "-100 game over prematuro", sf::Vector2f(x, y), 12,
-                      sf::Color(255, 100, 100));
+    ui_.dibujarTexto(objetivo, "Evaluador de posiciones", sf::Vector2f(x, y), 12,
+                      sf::Color(180, 180, 255));
     y += 16;
-    ui_.dibujarTexto(objetivo, "Penaliz. promedio partida:", sf::Vector2f(x, y), 12,
-                      sf::Color(255, 180, 100));
-    y += 16;
-    ui_.dibujarTexto(objetivo, "  alt/huecos/bumpiness", sf::Vector2f(x, y), 12,
-                      sf::Color(255, 180, 100));
+    ui_.dibujarTexto(objetivo, "12 features -> NN -> score", sf::Vector2f(x, y), 12,
+                      sf::Color(180, 180, 255));
 }
 
 void ModoEntrenamiento::renderizarPanelEstadisticas(sf::RenderTarget& objetivo) const {
@@ -499,17 +496,27 @@ void ModoEntrenamiento::renderizarRedSeleccionada(sf::RenderTarget& objetivo) co
                               sf::Vector2f(infoX, infoY));
     infoY += 25;
 
-    // Barras de acción
+    // Info de posiciones evaluadas
     ui_.dibujarTexto(const_cast<sf::RenderTarget&>(objetivo),
-                      "Acciones:", sf::Vector2f(infoX, infoY), 16, COLOR_TEXTO_TITULO);
+                      "Evaluador posiciones:", sf::Vector2f(infoX, infoY), 16, COLOR_TEXTO_TITULO);
     infoY += 22;
 
-    vizRed_.renderizarBarrasAccion(
-        const_cast<sf::RenderTarget&>(objetivo),
-        agente.obtenerUltimaSalida(),
-        sf::Vector2f(infoX, infoY),
-        sf::Vector2f(350, 160));
-    infoY += 180;
+    ss.str(""); ss << "Score elegido: " << agente.obtenerUltimoScore();
+    ui_.dibujarTexto(const_cast<sf::RenderTarget&>(objetivo),
+                      ss.str(), sf::Vector2f(infoX, infoY), 14, sf::Color(100, 255, 100));
+    infoY += 20;
+
+    const auto& pos = agente.obtenerUltimaPosicion();
+    ss.str(""); ss << "Rot: " << pos.rotacion << "  Col: " << pos.columna
+                    << (pos.usarHold ? "  (Hold)" : "");
+    ui_.dibujarTexto(const_cast<sf::RenderTarget&>(objetivo),
+                      ss.str(), sf::Vector2f(infoX, infoY), 14, COLOR_TEXTO);
+    infoY += 20;
+
+    ss.str(""); ss << "Posiciones evaluadas: " << agente.obtenerPosicionesEvaluadas().size();
+    ui_.dibujarTexto(const_cast<sf::RenderTarget&>(objetivo),
+                      ss.str(), sf::Vector2f(infoX, infoY), 14, COLOR_TEXTO);
+    infoY += 30;
 
     // Red neuronal
     auto entradaIA = agente.obtenerTetris().obtenerEntradaIA();

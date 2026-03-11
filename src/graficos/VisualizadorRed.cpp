@@ -115,17 +115,27 @@ void VisualizadorRed::renderizar(sf::RenderTarget& objetivo, const RedNeuronal& 
         objetivo.draw(etiqueta);
     }
 
-    // Etiquetas de acciones en la capa de salida
-    if (!layout.empty() && layout.back().size() <= static_cast<size_t>(NUM_ACCIONES)) {
+    // Etiquetas de la capa de salida
+    if (!layout.empty()) {
         etiqueta.setCharacterSize(12);
         etiqueta.setFillColor(COLOR_TEXTO);
-        for (size_t i = 0; i < layout.back().size() && i < NOMBRES_ACCIONES.size(); ++i) {
-            sf::Vector2f pos = layout.back()[i];
-            etiqueta.setString(NOMBRES_ACCIONES[i]);
+        if (arq.back() == 1) {
+            // Evaluador de posiciones: una sola salida "Score"
+            sf::Vector2f pos = layout.back()[0];
+            etiqueta.setString("Score");
             sf::FloatRect bounds = etiqueta.getLocalBounds();
             etiqueta.setOrigin({0, bounds.position.y + bounds.size.y / 2.0f});
             etiqueta.setPosition({pos.x + 12, pos.y});
             objetivo.draw(etiqueta);
+        } else if (layout.back().size() <= static_cast<size_t>(NUM_ACCIONES)) {
+            for (size_t i = 0; i < layout.back().size() && i < NOMBRES_ACCIONES.size(); ++i) {
+                sf::Vector2f pos = layout.back()[i];
+                etiqueta.setString(NOMBRES_ACCIONES[i]);
+                sf::FloatRect bounds = etiqueta.getLocalBounds();
+                etiqueta.setOrigin({0, bounds.position.y + bounds.size.y / 2.0f});
+                etiqueta.setPosition({pos.x + 12, pos.y});
+                objetivo.draw(etiqueta);
+            }
         }
     }
 }

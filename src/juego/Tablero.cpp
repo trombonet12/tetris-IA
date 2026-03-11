@@ -196,6 +196,216 @@ int Tablero::contarFilasCasiCompletas(int minCeldas) const {
     return count;
 }
 
+int Tablero::calcularTransicionesColumna() const {
+    int transiciones = 0;
+    for (int col = 0; col < TABLERO_ANCHO; ++col) {
+        // La celda por encima del tablero se considera vacía
+        bool anteriorLlena = false;
+        for (int fila = TABLERO_ALTO_OCULTO; fila < TABLERO_ALTO_TOTAL; ++fila) {
+            bool llena = (grid_[fila][col] != TipoPieza::NINGUNA);
+            if (llena != anteriorLlena) ++transiciones;
+            anteriorLlena = llena;
+        }
+        // La celda por debajo del tablero se considera llena (suelo)
+        if (!anteriorLlena) ++transiciones;
+    }
+    return transiciones;
+}
+
+int Tablero::calcularTransicionesFila() const {
+    int transiciones = 0;
+    for (int fila = TABLERO_ALTO_OCULTO; fila < TABLERO_ALTO_TOTAL; ++fila) {
+        // El borde izquierdo se considera lleno (pared)
+        bool anteriorLlena = true;
+        for (int col = 0; col < TABLERO_ANCHO; ++col) {
+            bool llena = (grid_[fila][col] != TipoPieza::NINGUNA);
+            if (llena != anteriorLlena) ++transiciones;
+            anteriorLlena = llena;
+        }
+        // El borde derecho se considera lleno (pared)
+        if (!anteriorLlena) ++transiciones;
+    }
+    return transiciones;
+}
+
+int Tablero::calcularPozos() const {
+    auto alturas = obtenerAlturas();
+    int sumaPozos = 0;
+    for (int col = 0; col < TABLERO_ANCHO; ++col) {
+        int altIzq = (col > 0) ? alturas[col - 1] : TABLERO_ALTO;
+        int altDer = (col < TABLERO_ANCHO - 1) ? alturas[col + 1] : TABLERO_ALTO;
+        int minAdyacente = std::min(altIzq, altDer);
+        int profundidad = minAdyacente - alturas[col];
+        if (profundidad > 0) sumaPozos += profundidad;
+    }
+    return sumaPozos;
+}
+
+CaracteristicasTablero Tablero::simularColocacion(TipoPieza tipo, int rotacion, int columna) const {
+    CaracteristicasTablero features;
+    if (tipo == TipoPieza::NINGUNA) return features;
+
+    // Obtener huecos antes de colocar
+    int huecosAntes = contarHuecos();
+
+    // Obtener celdas de la pieza en la rotación pedida
+    int rot = ((rotacion % 4) + 4) % 4;
+    const auto& forma = FORMAS[static_cast<int>(tipo)][rot];
+
+    // Calcular fila de aterrizaje (hard drop simulado)
+    // Empezar desde arriba e ir bajando
+    int filaBase = 0;
+    bool colisionado = false;
+    while (!colisionado) {
+        ++filaBase;
+        for (const auto& celda : forma) {
+            int f = celda.fila + filaBase;
+            int c = celda.col + columna;
+            if (c < 0 || c >= TABLERO_ANCHO || f >= TABLERO_ALTO_TOTAL) {
+                colisionado = true; break;
+            }
+            if (f >= 0 && grid_[f][c] != TipoPieza::NINGUNA) {
+                colisionado = true; break;
+            }
+        }
+    }
+    --filaBase; // Retroceder al último estado válido
+
+    // Verificar que la posición es válida
+    for (const auto& celda : forma) {
+        int f = celda.fila + filaBase;
+        int c = celda.col + columna;
+        if (c < 0 || c >= TABLERO_ANCHO || f < 0 || f >= TABLERO_ALTO_TOTAL) return features;
+        if (grid_[f][c] != TipoPieza::NINGUNA) return features;
+    }
+
+    // Crear copia del tablero y colocar la pieza
+    auto gridCopia = grid_;
+    for (const auto& celda : forma) {
+        int f = celda.fila + filaBase;
+        int c = celda.col + columna;
+        gridCopia[f][c] = tipo;
+    }
+
+    // Limpiar líneas completas en la copia
+    int lineasLimpiadas = 0;
+    for (int fila = TABLERO_ALTO_TOTAL - 1; fila >= 0; --fila) {
+        bool completa = true;
+        for (int col = 0; col < TABLERO_ANCHO; ++col) {
+            if (gridCopia[fila][col] == TipoPieza::NINGUNA) { completa = false; break; }
+        }
+        if (completa) {
+            ++lineasLimpiadas;
+            for (int f2 = fila; f2 > 0; --f2) gridCopia[f2] = gridCopia[f2 - 1];
+            gridCopia[0].fill(TipoPieza::NINGUNA);
+            ++fila; // Re-check this row
+        }
+    }
+
+    // Calcular features sobre el tablero resultante (gridCopia)
+
+    // Alturas
+    std::array<int, TABLERO_ANCHO> alturas;
+    alturas.fill(0);
+    for (int col = 0; col < TABLERO_ANCHO; ++col) {
+        for (int fila = TABLERO_ALTO_OCULTO; fila < TABLERO_ALTO_TOTAL; ++fila) {
+            if (gridCopia[fila][col] != TipoPieza::NINGUNA) {
+                alturas[col] = TABLERO_ALTO_TOTAL - fila;
+                break;
+            }
+        }
+    }
+
+    int alturaAgregada = 0, alturaMax = 0;
+    for (int col = 0; col < TABLERO_ANCHO; ++col) {
+        alturaAgregada += alturas[col];
+        if (alturas[col] > alturaMax) alturaMax = alturas[col];
+    }
+
+    // Huecos
+    int huecosDespues = 0;
+    for (int col = 0; col < TABLERO_ANCHO; ++col) {
+        bool encontrado = false;
+        for (int fila = TABLERO_ALTO_OCULTO; fila < TABLERO_ALTO_TOTAL; ++fila) {
+            if (gridCopia[fila][col] != TipoPieza::NINGUNA) encontrado = true;
+            else if (encontrado) ++huecosDespues;
+        }
+    }
+
+    // Bumpiness
+    int bumpiness = 0;
+    for (int col = 0; col < TABLERO_ANCHO - 1; ++col) {
+        bumpiness += std::abs(alturas[col] - alturas[col + 1]);
+    }
+
+    // Transiciones columna
+    int transCol = 0;
+    for (int col = 0; col < TABLERO_ANCHO; ++col) {
+        bool anteriorLlena = false;
+        for (int fila = TABLERO_ALTO_OCULTO; fila < TABLERO_ALTO_TOTAL; ++fila) {
+            bool llena = (gridCopia[fila][col] != TipoPieza::NINGUNA);
+            if (llena != anteriorLlena) ++transCol;
+            anteriorLlena = llena;
+        }
+        if (!anteriorLlena) ++transCol;
+    }
+
+    // Transiciones fila
+    int transFila = 0;
+    for (int fila = TABLERO_ALTO_OCULTO; fila < TABLERO_ALTO_TOTAL; ++fila) {
+        bool anteriorLlena = true;
+        for (int col = 0; col < TABLERO_ANCHO; ++col) {
+            bool llena = (gridCopia[fila][col] != TipoPieza::NINGUNA);
+            if (llena != anteriorLlena) ++transFila;
+            anteriorLlena = llena;
+        }
+        if (!anteriorLlena) ++transFila;
+    }
+
+    // Pozos
+    int pozos = 0;
+    for (int col = 0; col < TABLERO_ANCHO; ++col) {
+        int altIzq = (col > 0) ? alturas[col - 1] : TABLERO_ALTO;
+        int altDer = (col < TABLERO_ANCHO - 1) ? alturas[col + 1] : TABLERO_ALTO;
+        int prof = std::min(altIzq, altDer) - alturas[col];
+        if (prof > 0) pozos += prof;
+    }
+
+    // Filas casi completas
+    int filasCasi = 0;
+    for (int fila = TABLERO_ALTO_OCULTO; fila < TABLERO_ALTO_TOTAL; ++fila) {
+        int celdas = 0;
+        for (int col = 0; col < TABLERO_ANCHO; ++col) {
+            if (gridCopia[fila][col] != TipoPieza::NINGUNA) ++celdas;
+        }
+        if (celdas >= 8 && celdas < TABLERO_ANCHO) ++filasCasi;
+    }
+
+    // Densidad inferior (4 filas inferiores)
+    int celdasInf = 0;
+    for (int fila = TABLERO_ALTO_TOTAL - 4; fila < TABLERO_ALTO_TOTAL; ++fila) {
+        for (int col = 0; col < TABLERO_ANCHO; ++col) {
+            if (gridCopia[fila][col] != TipoPieza::NINGUNA) ++celdasInf;
+        }
+    }
+
+    // Normalizar y rellenar features
+    features.lineasCompletadas = static_cast<float>(lineasLimpiadas) / 4.0f;
+    features.alturaAgregada = static_cast<float>(alturaAgregada) / 200.0f;
+    features.alturaMaxima = static_cast<float>(alturaMax) / 20.0f;
+    features.huecos = static_cast<float>(huecosDespues) / 200.0f;
+    features.huecosCreados = static_cast<float>(huecosDespues - huecosAntes) / 20.0f;
+    features.bumpiness = static_cast<float>(bumpiness) / 180.0f;
+    features.transicionesColumna = static_cast<float>(transCol) / 200.0f;
+    features.transicionesFila = static_cast<float>(transFila) / 200.0f;
+    features.pozos = static_cast<float>(pozos) / 200.0f;
+    features.alturaAterrizaje = static_cast<float>(TABLERO_ALTO_TOTAL - filaBase) / 20.0f;
+    features.filasCasiCompletas = static_cast<float>(filasCasi) / 20.0f;
+    features.densidadInferior = static_cast<float>(celdasInf) / 40.0f;
+
+    return features;
+}
+
 bool Tablero::filaCompleta(int fila) const {
     for (int col = 0; col < TABLERO_ANCHO; ++col) {
         if (grid_[fila][col] == TipoPieza::NINGUNA) return false;

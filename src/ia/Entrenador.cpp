@@ -2,15 +2,19 @@
 // Tetris con IA Evolutiva - Implementación del Entrenador
 // Autor: Joan L.
 // Descripción: Gestiona el ciclo evolutivo completo: crea generaciones,
-//              simula partidas en paralelo, calcula fitness y evoluciona
-//              la población. Se ejecuta en su propio hilo para no bloquear
-//              la interfaz gráfica.
+//              cada agente juega una partida completa evaluando posiciones,
+//              calcula fitness y evoluciona la población. Se ejecuta en su
+//              propio hilo para no bloquear la interfaz gráfica.
 // =============================================================================
 #include "ia/Entrenador.h"
 #include "ia/RedNeuronal.h"
+#include "nucleo/GestorModelos.h"
 #include <algorithm>
 #include <chrono>
 #include <numeric>
+#include <ctime>
+#include <sstream>
+#include <iomanip>
 
 namespace tetris {
 
@@ -22,6 +26,9 @@ Entrenador::Entrenador()
     , generacionActual_(0)
     , mejorFitnessGlobal_(0.0f)
 {
+    unsigned int semilla = static_cast<unsigned int>(
+        std::chrono::steady_clock::now().time_since_epoch().count());
+    rng_.seed(semilla);
 }
 
 Entrenador::~Entrenador() {
@@ -76,16 +83,15 @@ void Entrenador::detener() {
 void Entrenador::ejecutarPaso() {
     std::lock_guard<std::mutex> lock(mutexDatos_);
 
-    // Avanzar un paso para cada agente activo
+    // En el nuevo sistema, un "paso" = un agente activo coloca una pieza
     bool todosTerminaron = true;
     for (auto& agente : agentes_) {
         if (agente.estaActivo()) {
-            agente.jugarPaso();
+            agente.colocarPieza();
             todosTerminaron = false;
         }
     }
 
-    // Si todos terminaron, evolucionar
     if (todosTerminaron) {
         evolucionarGeneracion();
     }
@@ -133,20 +139,69 @@ bool Entrenador::guardarMejorModelo(const std::string& ruta) const {
         }
     }
 
-    return agentes_[mejorIdx].obtenerRed().guardar(ruta);
+    // Usar GestorModelos para guardar con metadatos
+    MetadatosModelo meta;
+    meta.arquitectura = arquitecturaRed_;
+    meta.generacion = generacionActual_.load();
+    meta.fitness = mejorFit;
+    meta.piezasColocadas = agentes_[mejorIdx].obtenerTetris().obtenerEstadisticas().piezasColocadas;
+    meta.tetrisCount = agentes_[mejorIdx].obtenerTetris().obtenerEstadisticas().tetrisCount;
+
+    // Fecha actual
+    std::time_t ahora = std::time(nullptr);
+    std::tm tm_local;
+#ifdef _WIN32
+    localtime_s(&tm_local, &ahora);
+#else
+    localtime_r(&ahora, &tm_local);
+#endif
+    std::ostringstream ss;
+    ss << std::put_time(&tm_local, "%Y-%m-%d %H:%M:%S");
+    meta.fecha = ss.str();
+
+    return GestorModelos::guardar(ruta, agentes_[mejorIdx].obtenerRed(), meta);
 }
 
 bool Entrenador::cargarModelo(const std::string& ruta) {
     std::lock_guard<std::mutex> lock(mutexDatos_);
     if (agentes_.empty()) return false;
 
-    // Cargar pesos en el primer agente
-    if (!agentes_[0].obtenerRed().cargar(ruta)) return false;
+    // Intentar cargar con GestorModelos primero
+    MetadatosModelo meta;
+    bool cargado = GestorModelos::cargar(ruta, agentes_[0].obtenerRed(), meta);
 
-    // Copiar la arquitectura y pesos a todos los demás agentes (con mutación)
+    if (!cargado) {
+        // Fallback: intentar con RedNeuronal::cargar (formato antiguo)
+        cargado = agentes_[0].obtenerRed().cargar(ruta);
+    }
+
+    if (!cargado) return false;
+
+    // Distribuir pesos con diversidad
     auto pesosBase = agentes_[0].obtenerRed().obtenerPesos();
+    int numElite = std::max(1, tamPoblacion_ / 10); // 10% copia exacta
+
+    // Agente 0: pesos originales (sin mutación)
+    // Agentes 1..numElite: mutación leve
+    // Agentes numElite..N: mutación fuerte
+    std::normal_distribution<float> mutacionLeve(0.0f, AG_SIGMA_MUTACION);
+    std::normal_distribution<float> mutacionFuerte(0.0f, AG_SIGMA_MUTACION * 3.0f);
+    std::uniform_real_distribution<float> prob(0.0f, 1.0f);
+
     for (int i = 1; i < static_cast<int>(agentes_.size()); ++i) {
-        agentes_[i].obtenerRed().establecerPesos(pesosBase);
+        auto pesos = pesosBase;
+        if (i < numElite) {
+            // Mutación leve
+            for (auto& p : pesos) {
+                if (prob(rng_) < AG_TASA_MUTACION) p += mutacionLeve(rng_);
+            }
+        } else {
+            // Mutación fuerte
+            for (auto& p : pesos) {
+                if (prob(rng_) < 0.3f) p += mutacionFuerte(rng_);
+            }
+        }
+        agentes_[i].obtenerRed().establecerPesos(pesos);
     }
 
     return true;
@@ -180,106 +235,72 @@ void Entrenador::bucleEntrenamiento() {
             evolucionarGeneracion();
         }
 
+        // Auto-guardado cada N generaciones
+        int gen = generacionActual_.load();
+        if (gen > 0 && gen % GENERACIONES_AUTO_GUARDADO == 0) {
+            std::string ruta = GestorModelos::generarNombreModelo(
+                gen, mejorFitnessGlobal_.load());
+            guardarMejorModelo(ruta);
+        }
+
         // Comprobar si debemos detenernos
         if (estado_.load() == EstadoEntrenamiento::DETENIDO) break;
     }
 }
 
 void Entrenador::simularGeneracion() {
-    // Simular hasta que todos los agentes hayan terminado
+    // Modo animado (x1..x5): las piezas caen fila a fila para visualización
+    // Modo rápido (x10+): placement instantáneo, máxima velocidad
+
     bool todosTerminaron = false;
 
-    // Lote máximo por adquisición de mutex para no bloquear el hilo de render
-    constexpr int PASOS_POR_LOTE = 50;
-
     while (!todosTerminaron && estado_.load() == EstadoEntrenamiento::EJECUTANDO) {
-        todosTerminaron = true;
+        float vel = velocidadSimulacion_;
 
-        // Determinar cuántos pasos totales queremos este ciclo
-        int pasosRestantes = static_cast<int>(velocidadSimulacion_);
-        if (pasosRestantes < 1) pasosRestantes = 1;
+        if (vel < VELOCIDAD_X10) {
+            // --- MODO ANIMADO: piezas caen visualmente ---
+            {
+                std::lock_guard<std::mutex> lock(mutexDatos_);
 
-        while (pasosRestantes > 0 && estado_.load() == EstadoEntrenamiento::EJECUTANDO) {
-            int pasosLote = std::min(pasosRestantes, PASOS_POR_LOTE);
-            pasosRestantes -= pasosLote;
+                todosTerminaron = true;
+                for (auto& agente : agentes_) {
+                    if (!agente.estaActivo()) continue;
+                    todosTerminaron = false;
+
+                    if (!agente.estaAnimando()) {
+                        // IA decide y prepara la pieza (rotación + columna, sin drop)
+                        agente.decidirSiguientePieza();
+                    } else {
+                        // Bajar la pieza una fila
+                        agente.avanzarCaida();
+                    }
+                }
+            }
+
+            // Delay proporcional a la velocidad: x1=50ms, x2=25ms, x5=10ms
+            int delayMs = std::max(2, static_cast<int>(50.0f / vel));
+            std::this_thread::sleep_for(std::chrono::milliseconds(delayMs));
+
+        } else {
+            // --- MODO RÁPIDO: placement instantáneo ---
+            int piezasPorLote = static_cast<int>(vel);
+            if (piezasPorLote > 500) piezasPorLote = 500;
 
             {
                 std::lock_guard<std::mutex> lock(mutexDatos_);
 
-                for (int paso = 0; paso < pasosLote; ++paso) {
-                    // Recopilar entradas de agentes activos para evaluación por lotes
-                    std::vector<RedNeuronal*> redesActivas;
-                    std::vector<std::vector<float>> entradasActivas;
-                    std::vector<int> indicesActivos;
-
-                    for (int i = 0; i < static_cast<int>(agentes_.size()); ++i) {
-                        if (agentes_[i].estaActivo()) {
-                            redesActivas.push_back(&agentes_[i].obtenerRed());
-                            entradasActivas.push_back(
-                                agentes_[i].obtenerTetris().obtenerEntradaIA());
-                            indicesActivos.push_back(i);
-                        }
-                    }
-
-                    if (redesActivas.empty()) { pasosRestantes = 0; break; }
-
-                    // Evaluación por lotes en GPU
-                    auto salidas = RedNeuronal::evaluarLote(redesActivas, entradasActivas);
-
-                    // Aplicar acciones
-                    for (size_t j = 0; j < indicesActivos.size(); ++j) {
-                        int idx = indicesActivos[j];
-                        const auto& salida = salidas[j];
-
-                        // Detectar si se colocó una nueva pieza (reiniciar contador)
-                        int piezasAhora = agentes_[idx].obtenerTetris().obtenerEstadisticas().piezasColocadas;
-                        if (piezasAhora != agentes_[idx].piezasAlInicioAccion_) {
-                            agentes_[idx].accionesPiezaActual_ = 0;
-                            agentes_[idx].piezasAlInicioAccion_ = piezasAhora;
-                        }
-
-                        // Encontrar mejor acción
-                        int mejorAccion = 0;
-                        float mejorValor = salida[0];
-                        for (int a = 1; a < static_cast<int>(salida.size()); ++a) {
-                            if (salida[a] > mejorValor) {
-                                mejorValor = salida[a];
-                                mejorAccion = a;
-                            }
-                        }
-
-                        // Si se excede el límite, forzar caída dura
-                        ++agentes_[idx].accionesPiezaActual_;
-                        if (agentes_[idx].accionesPiezaActual_ > MAX_ACCIONES_POR_PIEZA) {
-                            mejorAccion = static_cast<int>(Accion::CAIDA_DURA);
-                        }
-
-                        agentes_[idx].obtenerTetris().ejecutarAccion(
-                            static_cast<Accion>(mejorAccion));
-                        // Solo aplicar gravedad cada N acciones para dar tiempo a rotar/posicionar
-                        if (agentes_[idx].accionesPiezaActual_ % IA_ACCIONES_POR_GRAVEDAD == 0) {
-                            agentes_[idx].obtenerTetris().ejecutarPasoLogico();
-                        }
-                    }
-                }
-
-                // Verificar si todos terminaron
                 todosTerminaron = true;
-                for (const auto& a : agentes_) {
-                    if (a.estaActivo()) {
-                        todosTerminaron = false;
-                        break;
+                for (auto& agente : agentes_) {
+                    if (!agente.estaActivo()) continue;
+
+                    for (int p = 0; p < piezasPorLote; ++p) {
+                        if (!agente.colocarPieza()) break;
                     }
+                    if (agente.estaActivo()) todosTerminaron = false;
                 }
-            } // mutex liberado aquí
+            }
 
-            // Ceder tiempo al hilo principal para que pueda renderizar
             std::this_thread::sleep_for(std::chrono::microseconds(200));
-        }
-
-        // Pausa adicional a velocidades bajas para mantener framerate visual
-        if (velocidadSimulacion_ < VELOCIDAD_X5) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(8));
         }
     }
 }
@@ -310,10 +331,10 @@ void Entrenador::evolucionarGeneracion() {
     // Evolucionar
     auto nuevosPesos = ag_.evolucionar(poblacionConFitness);
 
-    // Aplicar nuevos pesos y reiniciar partidas
+    // Aplicar nuevos pesos y reiniciar partidas con seeds aleatorias
     for (int i = 0; i < static_cast<int>(agentes_.size()); ++i) {
         agentes_[i].obtenerRed().establecerPesos(nuevosPesos[i]);
-        agentes_[i].reiniciar();
+        agentes_[i].reiniciar(rng_());
     }
 
     generacionActual_.fetch_add(1);
@@ -324,7 +345,7 @@ void Entrenador::inicializarPoblacion() {
     agentes_.reserve(tamPoblacion_);
 
     for (int i = 0; i < tamPoblacion_; ++i) {
-        agentes_.emplace_back(arquitecturaRed_, static_cast<unsigned int>(i + 1));
+        agentes_.emplace_back(arquitecturaRed_, rng_());
     }
 }
 

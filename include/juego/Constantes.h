@@ -213,52 +213,70 @@ inline const std::array<std::array<Coord, 5>, 8> WALL_KICKS_I = {{
     {{ {0,0}, {0,-1}, {0,2}, {2,-1}, {-1,2} }}
 }};
 
-// ---- Tamaños de entrada/salida de la red neuronal ----
-// Entrada: tablero aplanado (200) + tipo pieza actual one-hot (7)
-//        + posición pieza: columna, fila, rotación (3)
-//        + pieza siguiente one-hot (7)
-//        + alturas por columna normalizadas (10) + huecos normalizado (1)
-//        + bumpiness normalizada (1) = 229
-constexpr int NN_TAM_TABLERO = TABLERO_ANCHO * TABLERO_ALTO;     // 200
-constexpr int NN_TAM_PIEZA_ONEHOT = NUM_TIPOS_PIEZA;              // 7
-constexpr int NN_TAM_POSICION = 3;                                // col, fila, rotación
-constexpr int NN_TAM_SIGUIENTE = NUM_TIPOS_PIEZA;                 // 7 (next piece one-hot)
-constexpr int NN_TAM_HOLD_ONEHOT = NUM_TIPOS_PIEZA;               // 7 (hold piece one-hot)
-constexpr int NN_TAM_HOLD_DISPONIBLE = 1;                          // 1 (puede hacer hold?)
-constexpr int NN_TAM_ALTURAS = TABLERO_ANCHO;                     // 10
-constexpr int NN_TAM_HUECOS = 1;                                  // 1
-constexpr int NN_TAM_BUMPINESS = 1;                                // 1
-constexpr int NN_TAM_ENTRADA = NN_TAM_TABLERO + NN_TAM_PIEZA_ONEHOT
-                             + NN_TAM_POSICION + NN_TAM_SIGUIENTE
-                             + NN_TAM_HOLD_ONEHOT + NN_TAM_HOLD_DISPONIBLE
-                             + NN_TAM_ALTURAS + NN_TAM_HUECOS
-                             + NN_TAM_BUMPINESS;                  // 237
-constexpr int NN_TAM_SALIDA = NUM_ACCIONES;                       // 7
+// ---- Características del tablero para evaluación de posiciones IA ----
+// La IA evalúa placements candidatos, no acciones individuales.
+// Cada placement produce un vector de 12 features normalizadas.
+struct CaracteristicasTablero {
+    float lineasCompletadas = 0.0f;    // Líneas limpiadas por esta colocación (0-4, /4)
+    float alturaAgregada = 0.0f;       // Suma de alturas de todas las columnas (/200)
+    float alturaMaxima = 0.0f;         // Altura de la columna más alta (/20)
+    float huecos = 0.0f;              // Número total de huecos (/200)
+    float huecosCreados = 0.0f;       // Delta de huecos respecto al tablero antes (/20, signed)
+    float bumpiness = 0.0f;           // Suma dif. absolutas alturas adyacentes (/180)
+    float transicionesColumna = 0.0f; // Cambios lleno<->vacío en vertical (/200)
+    float transicionesFila = 0.0f;    // Cambios lleno<->vacío en horizontal (/200)
+    float pozos = 0.0f;              // Suma profundidades de pozos (/200)
+    float alturaAterrizaje = 0.0f;    // Fila donde aterriza la pieza (/20)
+    float filasCasiCompletas = 0.0f;  // Filas con >=8 de 10 celdas llenas (/20)
+    float densidadInferior = 0.0f;    // Proporción celdas llenas en 4 filas inferiores (0-1)
 
-// Arquitectura por defecto de la red neuronal (2 capas ocultas)
-inline const std::vector<int> NN_ARQUITECTURA_DEFECTO = { 237, 128, 64, 7 };
+    // Convierte a vector normalizado para la red neuronal
+    std::vector<float> aVector() const {
+        return { lineasCompletadas, alturaAgregada, alturaMaxima, huecos,
+                 huecosCreados, bumpiness, transicionesColumna, transicionesFila,
+                 pozos, alturaAterrizaje, filasCasiCompletas, densidadInferior };
+    }
+};
+constexpr int NUM_FEATURES_TABLERO = 12;
+
+// Posición candidata para la IA (resultado de enumerarPosiciones)
+struct PosicionIA {
+    int rotacion = 0;
+    int columna = 0;
+    bool usarHold = false;
+    CaracteristicasTablero features;
+};
+
+// ---- Tamaños de entrada/salida de la red neuronal ----
+// Evaluador de posiciones: entrada = 12 features, salida = 1 score
+constexpr int NN_TAM_ENTRADA = NUM_FEATURES_TABLERO;               // 12
+constexpr int NN_TAM_SALIDA = 1;                                   // 1 (score del placement)
+
+// Constantes antiguas mantenidas para compatibilidad de Tablero::obtenerEstado
+constexpr int NN_TAM_TABLERO = TABLERO_ANCHO * TABLERO_ALTO;       // 200
+constexpr int NN_TAM_ALTURAS = TABLERO_ANCHO;                      // 10
+constexpr int NN_TAM_HUECOS = 1;                                   // 1
+constexpr int NN_TAM_BUMPINESS = 1;                                // 1
+
+// Arquitectura por defecto de la red neuronal (evaluador de posiciones)
+inline const std::vector<int> NN_ARQUITECTURA_DEFECTO = { 12, 32, 16, 1 };
 
 // ---- Parámetros del algoritmo genético (por defecto) ----
 constexpr int AG_POBLACION_DEFECTO = 100;
 constexpr float AG_TASA_MUTACION = 0.10f;       // Proporcional para acumular mejoras
-constexpr float AG_SIGMA_MUTACION = 0.05f;      // Proporcional a escala Xavier (~0.07-0.10)
+constexpr float AG_SIGMA_MUTACION = 0.08f;      // Ajustado a red pequeña (~600 params)
 constexpr float AG_PORCENTAJE_ELITISMO = 0.10f;
-constexpr int AG_TAMANO_TORNEO = 3;              // Menos presión de selección, más diversidad
+constexpr int AG_TAMANO_TORNEO = 2;              // Menos presión de selección, más diversidad
+constexpr float AG_PROBABILIDAD_CRUCE = 0.60f;  // Crossover rate
 
-// ---- Fitness ----
-constexpr float FITNESS_POR_LINEA = 40.0f;                        // Limpiar líneas es el objetivo principal
-constexpr float FITNESS_POR_TETRIS = 800.0f;                      // Tetris (4 líneas) es el gold standard
-constexpr float FITNESS_POR_PIEZA = 3.0f;                         // Supervivencia: señal principal temprana
-constexpr float FITNESS_PENALIZACION_GAME_OVER = -100.0f;         // Penalizar muerte prematura
-constexpr float FITNESS_PENALIZACION_ALTURA = -1.5f;
-constexpr float FITNESS_POR_HUECO = -8.0f;                        // Huecos: el mayor problema en mal juego
-constexpr float FITNESS_PENALIZACION_BUMPINESS = -0.5f;
-constexpr float FITNESS_POR_FILA_CASI_COMPLETA = 5.0f;
-constexpr int FITNESS_PIEZAS_MINIMAS = 30;
-
-// Bonus progresivo por supervivencia
-constexpr float FITNESS_BONUS_SUPERVIVENCIA_50 = 0.5f;            // Extra por pieza después de 50 piezas
-constexpr float FITNESS_BONUS_SUPERVIVENCIA_200 = 1.0f;           // Extra por pieza después de 200 piezas
+// ---- Fitness (evaluador de posiciones) ----
+// La red evalúa la calidad del tablero internamente, el fitness externo mide resultados
+constexpr float FITNESS_POR_PIEZA = 1.0f;                         // Supervivencia: señal principal
+constexpr float FITNESS_POR_LINEA = 10.0f;                        // Líneas limpiadas
+constexpr float FITNESS_POR_TETRIS = 100.0f;                      // Tetris (4 líneas)
+constexpr float FITNESS_PENALIZACION_GAME_OVER = -50.0f;          // Muerte prematura (<20 piezas)
+constexpr int FITNESS_PIEZAS_MINIMAS = 20;
+constexpr float FITNESS_BONUS_SUPERVIVENCIA_100 = 0.5f;           // Extra por pieza después de 100
 
 // ---- Velocidades de simulación ----
 constexpr float VELOCIDAD_X1 = 1.0f;
@@ -267,10 +285,10 @@ constexpr float VELOCIDAD_X5 = 5.0f;
 constexpr float VELOCIDAD_X10 = 10.0f;
 constexpr float VELOCIDAD_MAX = 1000.0f;
 
-// ---- Límite anti-bucle para la IA ----
-// Máximo de acciones por pieza antes de forzar caída dura
-constexpr int MAX_ACCIONES_POR_PIEZA = 80;
-// Acciones que la IA puede tomar entre cada paso de gravedad
-constexpr int IA_ACCIONES_POR_GRAVEDAD = 4;
+// ---- Límite de piezas por partida (IA) ----
+constexpr int MAX_PIEZAS_POR_PARTIDA = 5000;
+
+// ---- Auto-guardado ----
+constexpr int GENERACIONES_AUTO_GUARDADO = 10;
 
 } // namespace tetris
