@@ -41,9 +41,10 @@ export class WatchScene {
     this.nnViz?.destroy();
     this.nnViz = null;
     this.benchmark = null;
-    this.duel = null;
-    this.compare = null;
-    this.tournament = null;
+    // NOTE: do NOT null duel/compare/tournament here. Their _show* methods
+    // assign them BEFORE calling _root() (the DOM references them), and _root()
+    // calls _cleanup(); nulling here would wipe the freshly-built view. They are
+    // view-gated in update()/onKeyDown so a stale one never ticks.
   }
 
   _root(...children) {
@@ -331,6 +332,13 @@ export class WatchScene {
         this.instant = v === 'instant';
         if (!this.instant) this.speed = v;
         for (const [key, bb] of speedBtns) bb.classList.toggle('btn-active', key === v);
+        // Instant mode plays the whole game to game-over in a flash; if the
+        // user then picks a watchable speed, restart the same seed so there is
+        // something to watch instead of a frozen final board.
+        if (this.game && this.game.state !== 'playing') {
+          this._resetGame(this.seed);
+          this.paused = false;
+        }
         this.ctx.audio.play('click');
       });
       speedBtns.set(v, b);
@@ -514,9 +522,10 @@ export class WatchScene {
     for (const h of this.heights) if (h > max) max = h;
     const lastCrit = this.criticalMoments[this.criticalMoments.length - 1];
     if (max > 15 && this.criticalMoments.length < 20 && (!lastCrit || game.stats.pieces - lastCrit > 10)) {
-      this.criticalMoments.push(game.stats.pieces);
+      const pieceIndex = game.stats.pieces; // capture NOW; the closure must not read the live count
+      this.criticalMoments.push(pieceIndex);
       this.criticalStrip.append(
-        button(`#${game.stats.pieces}`, () => this._replayTo(game.stats.pieces), 'btn-icon btn-ghost'),
+        button(`#${pieceIndex}`, () => this._replayTo(pieceIndex), 'btn-icon btn-ghost'),
       );
     }
     return true;
@@ -585,7 +594,7 @@ export class WatchScene {
     this.model.stats = stats;
     if (this.model.id) updateModel(this.model.id, { stats }).catch(() => {});
     const pct = prevMean > 0 ? Math.min(99, Math.round((st.lines / (prevMean * 2)) * 100)) : 50;
-    toast(`${STR.game.gameOver} · ${st.lines} ${STR.common.lines} · ${fmt(w.vsHistory, { pct })}`, 'ok', 4200);
+    toast(`${STR.game.gameOver} · ${st.lines} ${STR.common.lines} · ${st.tetrises} ${STR.game.tetris} · ${fmt(w.vsHistory, { pct })}`, 'ok', 4200);
   }
 
   // ── Benchmark ────────────────────────────────────────────────────────────
@@ -650,7 +659,7 @@ export class WatchScene {
         this.player.playPiece(game);
       }
       if (game.state !== 'playing' || game.stats.pieces >= 2000 || game.stats.lines >= 300) {
-        b.rows.push({ game: b.done + 1, lines: game.stats.lines, pieces: game.stats.pieces, score: game.stats.score, fitness: Math.round(gameFitness(game.stats)) });
+        b.rows.push({ game: b.done + 1, lines: game.stats.lines, tetris: game.stats.tetrises, pieces: game.stats.pieces, score: game.stats.score, fitness: Math.round(gameFitness(game.stats)) });
         b.done++;
         b.running = false;
       }
@@ -664,6 +673,8 @@ export class WatchScene {
       const lines = rows.map((r) => r.lines);
       const mean = lines.reduce((a, x) => a + x, 0) / lines.length;
       const sd = Math.sqrt(lines.reduce((a, x) => a + (x - mean) ** 2, 0) / lines.length);
+      const meanTetris = rows.reduce((a, r) => a + r.tetris, 0) / rows.length;
+      const totalTetris = rows.reduce((a, r) => a + r.tetris, 0);
       b.results.innerHTML = '';
       b.results.append(
         el(
@@ -673,6 +684,8 @@ export class WatchScene {
           card(w.stdDev, sd.toFixed(1)),
           card(w.min, Math.min(...lines)),
           card(w.max, Math.max(...lines)),
+          card(`${STR.game.tetris} (media)`, meanTetris.toFixed(1)),
+          card(`${STR.game.tetris} (total)`, totalTetris),
         ),
         button(w.exportCsv, () => downloadText(`benchmark_${this.model.name.replaceAll(' ', '_')}.csv`, toCsv(rows), 'text/csv')),
       );
@@ -783,7 +796,7 @@ export class WatchScene {
       ctx2d.clearRect(0, 0, side.canvas.width, side.canvas.height);
       this.ctx.boardRenderer.draw(ctx2d, this.snapshot, 2, 2, 22);
       const st = side.game.stats;
-      side.stats.textContent = `${st.lines} L · ${formatNumber(st.score)} pts · ${st.pieces} pzs`;
+      side.stats.textContent = `${st.lines} L · ${st.tetrises} T · ${formatNumber(st.score)} pts · ${st.pieces} pzs`;
     }
     const [a, b] = c.sides;
     const diff = a.game.stats.lines - b.game.stats.lines;
@@ -1012,7 +1025,7 @@ export class WatchScene {
       ctx2d.clearRect(0, 0, canvas.width, canvas.height);
       this.ctx.boardRenderer.draw(ctx2d, this.snapshot, 2, 2, 22);
       const st = game.stats;
-      statsEl.textContent = `${st.lines} L · ${formatNumber(st.score)} pts · PPS ${(st.pieces / Math.max(0.001, st.timeMs / 1000)).toFixed(2)}`;
+      statsEl.textContent = `${st.lines} L · ${st.tetrises} T · ${formatNumber(st.score)} pts · PPS ${(st.pieces / Math.max(0.001, st.timeMs / 1000)).toFixed(2)}`;
     }
   }
 
@@ -1146,7 +1159,7 @@ export class WatchScene {
     for (const h of this.heights) sumH += h;
     this.liveStats.innerHTML = '';
     this.liveStats.append(
-      el('div', {}, `${STR.common.lines}: ${st.lines} · ${STR.common.pieces}: ${st.pieces}`),
+      el('div', {}, `${STR.common.lines}: ${st.lines} · ${STR.game.tetris}: ${st.tetrises} · ${STR.common.pieces}: ${st.pieces}`),
       el('div', {}, `${STR.common.score}: ${formatNumber(st.score)} · ${STR.game.pps}: ${(st.pieces / Math.max(0.001, st.timeMs / 1000) || 0).toFixed(1)}`),
       el('div', {}, `${w.holes}: ${countHoles(this.game.board, this.heights)} · ${w.avgHeight}: ${(sumH / BOARD_WIDTH).toFixed(1)}`),
     );

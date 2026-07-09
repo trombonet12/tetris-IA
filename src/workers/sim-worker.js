@@ -10,7 +10,7 @@ import { gameFitness } from '../ai/fitness.js';
 import { unpackGenomes } from '../ai/genome.js';
 import { VISIBLE_CELLS } from '../game/constants.js';
 
-const STATS_FIELDS = 8; // [alive, score, lines, pieces, level, combo, fitnessSoFar, seedIdx]
+const STATS_FIELDS = 9; // [alive, score, lines, pieces, level, combo, fitnessSoFar, seedIdx, tetrises]
 
 let batch = null; // current generation state
 let speed = 1; // 1 | 2 | 4 | 8 | 'max'
@@ -39,6 +39,13 @@ self.onmessage = (e) => {
       break;
     case 'setSpeed':
       speed = msg.speed;
+      // Live frames flow at every animated speed; only MÁX runs headless.
+      // Updating this mid-generation lets the grid resume immediately instead
+      // of staying frozen until the next generation starts.
+      if (batch) {
+        batch.config.live = speed !== 'max';
+        batch.lastFrameAt = 0; // push a frame out on the next tick
+      }
       restartLoop();
       break;
     case 'pause':
@@ -249,6 +256,7 @@ function maybeSendFrame(minIntervalMs) {
     stats[o + 5] = s.combo;
     stats[o + 6] = agent.fitnessSum / Math.max(1, agent.seedIdx) + (agent.finished ? 0 : partialFitness(agent));
     stats[o + 7] = agent.seedIdx;
+    stats[o + 8] = s.tetrises;
   }
 
   let inspect = null;

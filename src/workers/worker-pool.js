@@ -1,7 +1,7 @@
 import { packGenomes } from '../ai/genome.js';
 import { VISIBLE_CELLS } from '../game/constants.js';
 
-export const STATS_FIELDS = 8; // matches sim-worker.js
+export const STATS_FIELDS = 9; // matches sim-worker.js: [alive,score,lines,pieces,level,combo,fitnessSoFar,seedIdx,tetrises]
 
 /**
  * Main-thread orchestrator: spreads the population across a pool of module

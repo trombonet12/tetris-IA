@@ -75,6 +75,7 @@ export class PlayScene {
     this.statScore = stat(s.common.score);
     this.statLines = stat(s.common.lines);
     this.statLevel = stat(s.common.level);
+    this.statTetris = stat(s.game.tetris);
     this.statTime = stat(s.common.time);
     this.statPps = stat(s.game.pps);
     this.comboLabel = el('div', { class: 'stat-value accent', style: { minHeight: '22px' } }, '');
@@ -123,7 +124,7 @@ export class PlayScene {
           { class: 'panel col', style: { width: '150px' } },
           el('div', { class: 'panel-title' }, s.game.hold),
           this.holdCanvas,
-          el('div', { style: { marginTop: '8px' } }, this.statScore.node, this.statLines.node, this.statLevel.node, this.statTime.node, this.statPps.node),
+          el('div', { style: { marginTop: '8px' } }, this.statScore.node, this.statLines.node, this.statLevel.node, this.statTetris.node, this.statTime.node, this.statPps.node),
         ),
         this.boardWrap,
         el(
@@ -581,6 +582,7 @@ export class PlayScene {
     this.statLines.value.textContent =
       activeMode === 'sprint' ? `${st.lines}/${SPRINT_GOAL}` : activeMode === 'marathon' ? `${st.lines}/${MARATHON_GOAL}` : String(st.lines);
     this.statLevel.value.textContent = String(st.level);
+    this.statTetris.value.textContent = String(st.tetrises);
     this.statTime.value.textContent = formatTime(st.timeMs, { centis: activeMode === 'sprint' });
     this.statPps.value.textContent = (st.pieces / Math.max(0.001, st.timeMs / 1000)).toFixed(2);
     this.comboLabel.textContent = st.combo > 0 ? `×${st.combo}` : '';
@@ -679,6 +681,7 @@ export class PlayScene {
         name: name.slice(0, 12),
         score: st.score,
         lines: st.lines,
+        tetrises: st.tetrises,
         level: st.level,
         timeMs: st.timeMs,
         date: Date.now(),
@@ -735,6 +738,7 @@ export class PlayScene {
           { class: 'row', style: { flexWrap: 'wrap', gap: '8px', marginBottom: '10px' } },
           statCard(STR.common.score, formatNumber(st.score)),
           statCard(STR.common.lines, st.lines),
+          statCard(STR.game.tetris, st.tetrises),
           statCard(STR.common.level, st.level),
           statCard(STR.common.time, formatTime(st.timeMs, { centis: this.mode === 'sprint' })),
           statCard(STR.game.pps, (st.pieces / Math.max(0.001, st.timeMs / 1000)).toFixed(2)),
@@ -922,6 +926,7 @@ export class RecordsScene {
               el('th', {}, STR.common.name),
               el('th', {}, isSprint ? STR.common.time : STR.common.score),
               el('th', {}, STR.common.lines),
+              el('th', {}, STR.game.tetris),
               el('th', {}, STR.common.level),
               el('th', {}, STR.common.date),
               el('th', {}, ''),
@@ -934,6 +939,7 @@ export class RecordsScene {
                 el('td', {}, entry.name),
                 el('td', {}, isSprint ? formatTime(entry.timeMs, { centis: true }) : formatNumber(entry.score)),
                 el('td', {}, String(entry.lines)),
+                el('td', {}, String(entry.tetrises ?? 0)),
                 el('td', {}, String(entry.level)),
                 el('td', {}, new Date(entry.date).toLocaleDateString('es-ES')),
                 el(

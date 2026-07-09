@@ -740,12 +740,19 @@ export class TrainingScene {
   }
 
   _setSpeed(v) {
+    const wasHeadless = this.speed === 'max';
     this.speed = v;
     this.pool?.setSpeed(v);
     for (const [key, b] of this._speedBtns) b.classList.toggle('btn-active', key === v);
     const headless = v === 'max';
     this.gridCanvas.style.display = headless ? 'none' : 'block';
     this.headlessPanel.style.display = headless ? 'flex' : 'none';
+    // Coming back from MÁX: the grid canvas had zero size while hidden, so
+    // recompute its layout and force a full repaint once frames resume.
+    if (wasHeadless && !headless && this.gridRenderer) {
+      this.gridRenderer.resize();
+      this.gridRenderer.invalidate();
+    }
   }
 
   _setPaused(p) {
@@ -935,6 +942,7 @@ export class TrainingScene {
         fitness: this.gridRenderer.stats[o + 6],
         lines: this.gridRenderer.stats[o + 2],
         pieces: this.gridRenderer.stats[o + 3],
+        tetris: this.gridRenderer.stats[o + 8],
         alive: this.gridRenderer.stats[o] > 0,
       });
     }
@@ -944,7 +952,7 @@ export class TrainingScene {
       el(
         'table',
         { class: 'data-table' },
-        el('tr', {}, el('th', {}, t.rankCols.agent), el('th', {}, t.rankCols.fitness), el('th', {}, t.rankCols.lines), el('th', {}, t.rankCols.status)),
+        el('tr', {}, el('th', {}, t.rankCols.agent), el('th', {}, t.rankCols.fitness), el('th', {}, t.rankCols.lines), el('th', {}, t.rankCols.tetris), el('th', {}, t.rankCols.status)),
         rows.slice(0, 15).map((r) =>
           el(
             'tr',
@@ -952,6 +960,7 @@ export class TrainingScene {
             el('td', {}, `#${r.id}`),
             el('td', {}, formatNumber(r.fitness)),
             el('td', {}, String(r.lines)),
+            el('td', {}, String(r.tetris)),
             el('td', {}, r.alive ? t.statusPlaying : t.statusDone),
           ),
         ),
