@@ -1,36 +1,4 @@
-# Build
-build/
-out/
-
-# vcpkg installed packages (local manifest)
-vcpkg_installed/
-
-# IDE / Editor
-.vs/
-.vscode/
-*.user
-*.suo
-*.sln.docstates
-CMakeSettings.json
-
-# Compiled binaries
-*.exe
-*.dll
-*.lib
-*.obj
-*.pdb
-*.ilk
-*.exp
-
-# CUDA compiled
-*.cubin
-*.fatbin
-*.ptx
-
-# OS
-Thumbs.db
-Desktop.ini
+node_modules/
+*.log
 .DS_Store
-
-# Models saved at runtime
-modelos/*.bin
+Thumbs.db
