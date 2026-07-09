@@ -1,8 +1,0 @@
-{
-    "name": "tetris-ia",
-    "version": "1.0.0",
-    "description": "Tetris con IA Evolutiva - SFML + CUDA. Autor: Joan L.",
-    "dependencies": [
-        "sfml"
-    ]
-}

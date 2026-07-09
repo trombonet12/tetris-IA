@@ -1,0 +1,12 @@
+{
+  "name": "tetris-ia",
+  "version": "1.0.0",
+  "description": "Tetris con IA evolutiva — juego web sin dependencias (HTML + JS vanilla + Canvas)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "serve": "node tools/serve.js",
+    "test": "node --test tests/",
+    "smoke": "node tools/smoke.js"
+  }
+}
